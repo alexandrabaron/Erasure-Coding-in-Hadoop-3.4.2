@@ -34,6 +34,10 @@ import java.util.List;
  *
  * RaptorQ is a fountain code that can generate unlimited parity symbols.
  * This implementation uses the OpenRQ library for the core RaptorQ algorithm.
+ * 
+ * Note: This implementation stores FEC parameters as metadata to enable
+ * proper decoding. In a production system, these parameters should be
+ * persisted with the encoded data.
  */
 @InterfaceAudience.Private
 public class RaptorQRawEncoder extends RawErasureEncoder {
@@ -106,6 +110,12 @@ public class RaptorQRawEncoder extends RawErasureEncoder {
         }
       }
       
+      // Store FEC parameters as metadata in the last output buffer
+      // This is a simplified approach - in production, metadata should be stored separately
+      if (encodingState.outputs.length > 0) {
+        storeFECParametersAsMetadata(fecParams, encodingState.outputs[encodingState.outputs.length - 1]);
+      }
+      
     } catch (Exception e) {
       throw new RuntimeException("RaptorQ encoding failed", e);
     }
@@ -175,8 +185,63 @@ public class RaptorQRawEncoder extends RawErasureEncoder {
         }
       }
       
+      // Store FEC parameters as metadata in the last output
+      if (encodingState.outputs.length > 0) {
+        storeFECParametersAsMetadata(fecParams, encodingState.outputs[encodingState.outputs.length - 1]);
+      }
+      
     } catch (Exception e) {
       throw new RuntimeException("RaptorQ encoding failed", e);
+    }
+  }
+  
+  /**
+   * Store FEC parameters as metadata for later decoding.
+   * This is a simplified approach - in production, metadata should be stored separately.
+   */
+  private void storeFECParametersAsMetadata(FECParameters fecParams, ByteBuffer outputBuffer) {
+    // For simplicity, we'll store a marker and basic info
+    // In a real implementation, this should be stored separately
+    try {
+      // Store a simple marker to indicate FEC parameters
+      outputBuffer.put((byte) 0xFF); // Marker
+      outputBuffer.putLong(fecParams.dataLength());
+      outputBuffer.putInt(fecParams.symbolSize());
+      outputBuffer.putInt(fecParams.numberOfSourceBlocks());
+    } catch (Exception e) {
+      // If we can't store metadata, continue without it
+      // The decoder will need to estimate parameters
+    }
+  }
+  
+  /**
+   * Store FEC parameters as metadata for later decoding (byte array version).
+   */
+  private void storeFECParametersAsMetadata(FECParameters fecParams, byte[] outputArray) {
+    // For simplicity, we'll store a marker and basic info
+    // In a real implementation, this should be stored separately
+    try {
+      if (outputArray.length >= 17) { // Need space for marker + 8 + 4 + 4 bytes
+        int offset = outputArray.length - 17;
+        outputArray[offset] = (byte) 0xFF; // Marker
+        // Store data length (8 bytes)
+        long dataLength = fecParams.dataLength();
+        for (int i = 0; i < 8; i++) {
+          outputArray[offset + 1 + i] = (byte) (dataLength >>> (8 * i));
+        }
+        // Store symbol size (4 bytes)
+        int symbolSize = fecParams.symbolSize();
+        for (int i = 0; i < 4; i++) {
+          outputArray[offset + 9 + i] = (byte) (symbolSize >>> (8 * i));
+        }
+        // Store number of source blocks (4 bytes)
+        int numSourceBlocks = fecParams.numberOfSourceBlocks();
+        for (int i = 0; i < 4; i++) {
+          outputArray[offset + 13 + i] = (byte) (numSourceBlocks >>> (8 * i));
+        }
+      }
+    } catch (Exception e) {
+      // If we can't store metadata, continue without it
     }
   }
 }
