@@ -39,8 +39,8 @@ Integrate a non-RS erasure code into Hadoop’s erasure coding framework using R
    - Allow `io.erasurecode.codec.raptorq.rawcoders` override [pending]
    - Optional flags: allowChangeInputs/verboseDump passthrough [pending]
 6. Tests:
-   - Unit tests for encode/decode parity regeneration, multiple erasures ≤ m [pending]
-   - ByteBuffer vs byte[] coverage [pending]
+   - Unit tests for encode/decode parity regeneration, multiple erasures ≤ m [done]
+   - ByteBuffer vs byte[] coverage [done]
    - Random data fuzzing; padding edge cases [pending]
 7. Benchmarks (optional): compare throughput vs XOR/RS on sample sizes [pending]
 
