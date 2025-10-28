@@ -59,6 +59,8 @@ Integrate a non-RS erasure code into Hadoop’s erasure coding framework using R
 Notes:
 - Data units map to ESIs `0..K-1`; parity units map to ESIs `K..K+m-1`. Changing this mapping will break compatibility.
 - All K data chunks in a group must have equal size T. If not, introduce padding (future enhancement).
+- ServiceLoader registration requires the file to be present on the runtime classpath at `META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory`. Ensure this path is packaged in the JAR under resources when building.
+- Make sure OpenRQ (`net.fec.openrq.*`) classes are on the compile/runtime classpath (include the OpenRQ sources or JAR).
 
 ### Notes
 - OpenRQ does not support sub-block interleaving (>1) but is RFC 6330 compliant.

@@ -43,6 +43,9 @@ public class RaptorQRawDecoder extends RawErasureDecoder {
     int k = getNumDataUnits();
     int m = getNumParityUnits();
     int T = decodingState.decodeLength;
+    if (T == 0) {
+      return;
+    }
 
     // Build concatenated buffer for available symbols (exactly k symbols suffice)
     byte[] data = new byte[k * T];
@@ -99,6 +102,9 @@ public class RaptorQRawDecoder extends RawErasureDecoder {
     int k = getNumDataUnits();
     int m = getNumParityUnits();
     int T = decodingState.decodeLength;
+    if (T == 0) {
+      return;
+    }
 
     byte[] data = new byte[k * T];
     int sbn = 0;

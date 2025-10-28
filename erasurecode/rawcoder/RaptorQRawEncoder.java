@@ -40,6 +40,9 @@ public class RaptorQRawEncoder extends RawErasureEncoder {
     int k = getNumDataUnits();
     int m = getNumParityUnits();
     int T = encodingState.encodeLength;
+    if (T == 0) {
+      return;
+    }
 
     // Ensure outputs are initialized
     CoderUtil.resetOutputBuffers(encodingState.outputs, T);
@@ -74,6 +77,9 @@ public class RaptorQRawEncoder extends RawErasureEncoder {
     int k = getNumDataUnits();
     int m = getNumParityUnits();
     int T = encodingState.encodeLength;
+    if (T == 0) {
+      return;
+    }
 
     // Ensure outputs are initialized
     CoderUtil.resetOutputBuffers(encodingState.outputs, encodingState.outputOffsets, T);
