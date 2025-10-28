@@ -62,6 +62,49 @@ Notes:
 - ServiceLoader registration requires the file to be present on the runtime classpath at `META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory`. Ensure this path is packaged in the JAR under resources when building.
 - Make sure OpenRQ (`net.fec.openrq.*`) classes are on the compile/runtime classpath (include the OpenRQ sources or JAR).
 
+## Build and Test
+
+### Prerequisites
+- JDK 8+ installed and on PATH
+- Windows PowerShell (commands below use PowerShell syntax)
+
+### Compile
+We compile all Java sources (Hadoop EC + OpenRQ + tests) into a single `out/` folder.
+
+PowerShell:
+
+```powershell
+mkdir out -ErrorAction SilentlyContinue | Out-Null
+$cp = "OpenRQ-master/src/main;."  # classpath with OpenRQ sources and project root
+$sources = Get-ChildItem -Recurse -Filter *.java | ForEach-Object { $_.FullName }
+javac -encoding UTF-8 -cp $cp -d out $sources
+```
+
+Notes:
+- The classpath uses `;` as a separator on Windows. If you run on macOS/Linux, replace `;` with `:`.
+- If you package OpenRQ as a JAR instead, point `-cp` to that JAR instead of the source folder.
+
+### Run tests
+Tests live under `tests/org/apache/hadoop/io/erasurecode/` and provide a simple main runner.
+
+PowerShell:
+
+```powershell
+$cp = "out;OpenRQ-master/src/main"  # compiled classes + OpenRQ sources on classpath
+java -cp $cp org.apache.hadoop.io.erasurecode.RaptorQRawCoderTest
+```
+
+Expected output:
+
+```
+OK: RaptorQRawCoder tests passed
+```
+
+### Troubleshooting
+- Class not found for OpenRQ (`net.fec.openrq.*`): ensure `OpenRQ-master/src/main` (or its JAR) is on `-cp` both at compile-time and runtime.
+- ServiceLoader factory not discovered: verify `erasurecode/META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory` is on the runtime classpath (packaged in resources when building a JAR). For raw `javac/java` runs, classes are loaded directly and ServiceLoader registration is used by higher-level Hadoop flows; the tests instantiate the raw coders directly.
+- OutOfMemoryError for very large chunk sizes (T): current implementation concatenates `k*T` into a buffer; reduce T during testing or refactor to streaming.
+
 ### Notes
 - OpenRQ does not support sub-block interleaving (>1) but is RFC 6330 compliant.
 - Decoding throughput is acceptable for a prototype; focus on correctness and adapter fidelity first.

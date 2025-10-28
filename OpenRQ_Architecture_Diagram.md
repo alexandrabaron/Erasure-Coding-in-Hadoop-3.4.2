@@ -48,3 +48,45 @@
 - Code: `OpenRQ-master/src/main/net/fec/openrq/*`
 
 
+### Diagram (Mermaid)
+
+```mermaid
+flowchart TD
+    subgraph Sender[Sender]
+      A[Source Data (bytes)] -->|Partition| B[Source Blocks]
+      B -->|Split into symbols of size T| C[Source Symbols (K)]
+      C -->|OpenRQ::DataEncoder| D[SourceBlockEncoder]
+      D -->|Emit K source packets (ESI 0..K-1)| E1[Source Packets]
+      D -->|Emit m repair packets (ESI K..K+m-1)| E2[Repair Packets]
+    end
+
+    E1 -.->|Any order / any subset| Net((Network))
+    E2 -.->|Any order / any subset| Net
+
+    subgraph Receiver[Receiver]
+      Net -.-> F[Packets Arrive]
+      F -->|Parse & Validate| G[OpenRQ::DataDecoder]
+      G --> H[SourceBlockDecoder]
+      H -->|If ≥ K independent symbols| I[Decode (linear system)]
+      I --> J[Recovered Source Symbols]
+      J --> K[Reassembled Source Block]
+      K --> L[Concatenate Blocks]
+      L --> M[Reconstructed Source Data]
+    end
+
+    classDef comp fill:#eef,stroke:#446
+    classDef data fill:#efe,stroke:#484
+    class A,B,C,K,L,M comp
+    class E1,E2,F data
+
+    %% Hadoop adapter mapping
+    subgraph HadoopAdapter[Hadoop Adapter]
+      HA1[Inputs: k data chunks of size T] -->|Concatenate| HA2[k*T contiguous]
+      HA2 -->|Encode m repair ESIs K..K+m-1| HA3[m parity chunks]
+      HB1[Inputs: data+parity with erasures] -->|Feed available packets| HB2[Decode]
+      HB2 -->|Recovered data| HB3[Fill erased data chunks]
+      HB2 -->|Regenerate parity via re-encode| HB4[Fill erased parity chunks]
+    end
+```
+
+
