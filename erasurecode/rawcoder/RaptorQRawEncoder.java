@@ -41,6 +41,9 @@ public class RaptorQRawEncoder extends RawErasureEncoder {
     int m = getNumParityUnits();
     int T = encodingState.encodeLength;
 
+    // Ensure outputs are initialized
+    CoderUtil.resetOutputBuffers(encodingState.outputs, T);
+
     // Gather input into a contiguous byte[] for OpenRQ
     byte[] data = new byte[k * T];
     int pos = 0;
@@ -48,24 +51,21 @@ public class RaptorQRawEncoder extends RawErasureEncoder {
       ByteBuffer in = encodingState.inputs[i];
       int oldPos = in.position();
       in.get(data, pos, T);
-      in.position(oldPos); // don't consume; RawErasureEncoder will advance after return
+      in.position(oldPos);
       pos += T;
     }
 
-    // Configure OpenRQ (single source block Z=1, symbol size T)
     FECParameters fecParams = FECParameters.newParameters((long) data.length, T, 1);
     DataEncoder enc = OpenRQ.newEncoder(data, fecParams);
     SourceBlockEncoder sbe = enc.sourceBlock(0);
 
-    // Produce m repair symbols with deterministic ESIs K..K+m-1
     for (int p = 0; p < m; p++) {
       int esi = k + p;
       ByteBuffer sym = sbe.repairPacket(esi).symbols();
-      // Write into output parity buffers
       ByteBuffer out = encodingState.outputs[p];
       int outPos = out.position();
       out.put(sym);
-      out.position(outPos); // don't finalize here; framework adjusts positions
+      out.position(outPos);
     }
   }
 
@@ -75,7 +75,9 @@ public class RaptorQRawEncoder extends RawErasureEncoder {
     int m = getNumParityUnits();
     int T = encodingState.encodeLength;
 
-    // Concatenate inputs
+    // Ensure outputs are initialized
+    CoderUtil.resetOutputBuffers(encodingState.outputs, encodingState.outputOffsets, T);
+
     byte[] data = new byte[k * T];
     int pos = 0;
     for (int i = 0; i < k; i++) {

@@ -48,6 +48,18 @@ Integrate a non-RS erasure code into Hadoop’s erasure coding framework using R
 - Hadoop EC sources: `erasurecode/`
 - OpenRQ library sources: `OpenRQ-master/src/main/net/fec/openrq`
 
+### Configuration
+- Enable the codec class mapping (optional, defaults provided):
+  - `io.erasurecode.codec.raptorq=org.apache.hadoop.io.erasurecode.codec.RaptorQErasureCodec`
+- Choose raw coder fallback order (first wins):
+  - `io.erasurecode.codec.raptorq.rawcoders=raptorq_java`
+- Toggle native usage (not applicable to RaptorQ here, kept for parity):
+  - `io.erasurecode.codec.native.enabled=true`
+
+Notes:
+- Data units map to ESIs `0..K-1`; parity units map to ESIs `K..K+m-1`. Changing this mapping will break compatibility.
+- All K data chunks in a group must have equal size T. If not, introduce padding (future enhancement).
+
 ### Notes
 - OpenRQ does not support sub-block interleaving (>1) but is RFC 6330 compliant.
 - Decoding throughput is acceptable for a prototype; focus on correctness and adapter fidelity first.
