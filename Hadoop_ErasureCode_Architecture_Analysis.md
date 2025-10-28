@@ -1,155 +1,155 @@
-# Analyse Détaillée de l'Architecture des Codes d'Effacement Hadoop
+# Detailed Analysis of Hadoop Erasure Coding Architecture
 
-## Vue d'ensemble
+## Overview
 
-Le système de codes d'effacement (erasure codes) dans Hadoop est organisé en plusieurs couches architecturales distinctes qui permettent une séparation claire des responsabilités et une extensibilité maximale.
+Hadoop’s erasure code system is organized into several distinct architectural layers that enable clear separation of concerns and maximum extensibility.
 
-## Architecture en Couches
+## Layered Architecture
 
-### 1. Couche Codec (codec/)
-**Rôle**: Interface principale et configuration des codes d'effacement
+### 1. Codec Layer (codec/)
+Role: Primary interface and configuration for erasure codes
 
-#### Classes principales:
-- **`ErasureCodec`** (classe abstraite): Interface de base pour tous les codes d'effacement
-- **`XORErasureCodec`**: Implémentation XOR simple (k+1, k)
-- **`HHXORErasureCodec`**: Implémentation Hitchhiker-XOR avancée
-- **`DummyErasureCodec`**: Codec de test sans calcul réel
-- **`RSErasureCodec`**: Codec Reed-Solomon (exclu du projet)
+#### Main classes:
+- `ErasureCodec` (abstract): Base interface for all erasure codes
+- `XORErasureCodec`: Simple XOR implementation (k+1, k)
+- `HHXORErasureCodec`: Advanced Hitchhiker-XOR implementation
+- `DummyErasureCodec`: Test codec with no real computation
+- `RSErasureCodec`: Reed-Solomon codec (excluded from this project)
 
-#### Fonctionnalités:
-- Définit le schéma d'effacement (nombre de blocs de données et de parité)
-- Crée les encodeurs et décodeurs appropriés
-- Gère les options de configuration spécifiques au codec
+#### Features:
+- Defines the erasure schema (number of data and parity blocks)
+- Creates the appropriate encoders and decoders
+- Manages codec-specific configuration options
 
-### 2. Couche Coder (coder/)
-**Rôle**: Préparation des données et orchestration du processus d'encodage/décodage
+### 2. Coder Layer (coder/)
+Role: Data preparation and orchestration of the encode/decode process
 
-#### Classes principales:
-- **`ErasureEncoder`** (classe abstraite): Interface pour l'encodage
-- **`ErasureDecoder`** (classe abstraite): Interface pour le décodage
-- **`ErasureCodingStep`**: Interface pour les étapes de codage
-- **`ErasureEncodingStep`**: Étape d'encodage concrète
-- **`ErasureDecodingStep`**: Étape de décodage concrète
+#### Main classes:
+- `ErasureEncoder` (abstract): Interface for encoding
+- `ErasureDecoder` (abstract): Interface for decoding
+- `ErasureCodingStep`: Interface for coding steps
+- `ErasureEncodingStep`: Concrete encoding step
+- `ErasureDecodingStep`: Concrete decoding step
 
-#### Fonctionnalités:
-- Prépare les blocs d'entrée et de sortie
-- Calcule les étapes de codage nécessaires
-- Gère la logique métier spécifique à chaque codec
-- Interface entre la couche haute et les raw coders
+#### Features:
+- Prepares input and output blocks
+- Computes the necessary coding steps
+- Encapsulates codec-specific business logic
+- Bridges higher-level logic to raw coders
 
-### 3. Couche RawCoder (rawcoder/)
-**Rôle**: Implémentation des algorithmes mathématiques purs
+### 3. RawCoder Layer (rawcoder/)
+Role: Implementation of the pure math algorithms
 
-#### Classes principales:
-- **`RawErasureEncoder`** (classe abstraite): Interface pour l'encodage brut
-- **`RawErasureDecoder`** (classe abstraite): Interface pour le décodage brut
-- **`RawErasureCoderFactory`**: Factory pour créer les raw coders
-- **`XORRawEncoder/XORRawDecoder`**: Implémentation XOR pure
-- **`DummyRawEncoder/DummyRawDecoder`**: Implémentation factice
+#### Main classes:
+- `RawErasureEncoder` (abstract): Interface for raw encoding
+- `RawErasureDecoder` (abstract): Interface for raw decoding
+- `RawErasureCoderFactory`: Factory to create raw coders
+- `XORRawEncoder/XORRawDecoder`: Pure XOR implementation
+- `DummyRawEncoder/DummyRawDecoder`: Dummy implementation
 
-#### Fonctionnalités:
-- Effectue les calculs mathématiques réels (XOR, RS, etc.)
-- Gère les ByteBuffer et byte[] directement
-- Optimisé pour les performances
-- Stateless et thread-safe
+#### Features:
+- Performs the actual math (XOR, RS, etc.)
+- Works directly with ByteBuffers and byte[]
+- Performance oriented
+- Stateless and thread-safe
 
-## Système de Registration
+## Registration System
 
 ### CodecRegistry
-- Utilise **ServiceLoader** pour découvrir automatiquement les factories
-- Mappe les noms de codecs aux factories disponibles
-- Gère les conflits de noms
-- Priorise les implémentations natives
+- Uses ServiceLoader to auto-discover factories
+- Maps codec names to available factories
+- Handles name conflicts
+- Prioritizes native implementations
 
 ### Configuration
-- Les codecs sont configurés via `CodecUtil`
-- Support des codecs personnalisés via configuration
-- Fallback automatique entre différentes implémentations
+- Codecs are configured via `CodecUtil`
+- Supports custom codecs via configuration
+- Automatic fallback across implementations
 
-## Analyse des Implémentations Existantes
+## Analysis of Existing Implementations
 
 ### 1. XOR Codec
-**Caractéristiques:**
-- **Simplicité**: Algorithme XOR pur
-- **Limitation**: Un seul bloc de parité (k+1, k)
-- **Performance**: Très rapide
-- **Usage**: Principalement comme primitive pour d'autres codes
+Characteristics:
+- Simplicity: pure XOR algorithm
+- Limitation: single parity block (k+1, k)
+- Performance: very fast
+- Usage: mostly as a primitive for other codes
 
-**Algorithme:**
+Algorithm:
 ```java
-// Encodage: P = D1 ⊕ D2 ⊕ ... ⊕ Dk
-// Décodage: Di = P ⊕ D1 ⊕ D2 ⊕ ... ⊕ Di-1 ⊕ Di+1 ⊕ ... ⊕ Dk
+// Encoding: P = D1 ⊕ D2 ⊕ ... ⊕ Dk
+// Decoding: Di = P ⊕ D1 ⊕ D2 ⊕ ... ⊕ Di-1 ⊕ Di+1 ⊕ ... ⊕ Dk
 ```
 
 ### 2. HHXOR (Hitchhiker-XOR)
-**Caractéristiques:**
-- **Complexité**: Combine RS et XOR
-- **Avantage**: Réduction de 25-45% du trafic réseau
-- **Recherche**: Développé à UC Berkeley
-- **Usage**: Code avancé pour environnements de production
+Characteristics:
+- Complexity: combines RS and XOR
+- Advantage: reduces network traffic by 25-45%
+- Research: developed at UC Berkeley
+- Usage: advanced code for production environments
 
-**Architecture:**
-- Utilise un encodeur RS et un encodeur XOR
-- Sub-packet size de 2
-- Optimise la reconstruction des données
+Architecture:
+- Uses an RS encoder and an XOR encoder
+- Sub-packet size of 2
+- Optimizes data reconstruction
 
 ### 3. Dummy Codec
-**Caractéristiques:**
-- **Usage**: Tests et benchmarks
-- **Performance**: Aucun calcul réel
-- **Utilité**: Isolation des problèmes de performance
+Characteristics:
+- Usage: tests and benchmarks
+- Performance: no real computation
+- Utility: isolates performance issues
 
-## Flux de Données
+## Data Flow
 
-### Encodage:
-1. **ECBlockGroup** → **ErasureEncoder** → **ErasureEncodingStep**
-2. **ErasureEncodingStep** → **RawErasureEncoder** → **Calculs mathématiques**
-3. Résultat: Blocs de parité générés
+### Encoding:
+1. ECBlockGroup → ErasureEncoder → ErasureEncodingStep
+2. ErasureEncodingStep → RawErasureEncoder → Math computations
+3. Result: parity blocks generated
 
-### Décodage:
-1. **ECBlockGroup** (avec blocs effacés) → **ErasureDecoder** → **ErasureDecodingStep**
-2. **ErasureDecodingStep** → **RawErasureDecoder** → **Reconstruction**
-3. Résultat: Blocs effacés reconstruits
+### Decoding:
+1. ECBlockGroup (with erased blocks) → ErasureDecoder → ErasureDecodingStep
+2. ErasureDecodingStep → RawErasureDecoder → Reconstruction
+3. Result: erased blocks reconstructed
 
-## Structures de Données Clés
+## Key Data Structures
 
 ### ECSchema
-- Définit le schéma d'effacement (k, m)
-- Nom du codec
-- Options supplémentaires
+- Defines the erasure schema (k, m)
+- Codec name
+- Extra options
 
 ### ErasureCoderOptions
-- Nombre de blocs de données et de parité
-- Options de performance (allowChangeInputs, allowVerboseDump)
+- Number of data and parity blocks
+- Performance options (allowChangeInputs, allowVerboseDump)
 
 ### ECBlock/ECBlockGroup
-- Représentation des blocs de données et de parité
-- Gestion des états (effacé, disponible)
+- Representation of data and parity blocks
+- State management (erased, available)
 
-## Points d'Extension pour Nouveau Codec
+## Extension Points for a New Codec
 
-### 1. Créer le Codec Principal
+### 1. Create the main codec
 ```java
-public class MonCodec extends ErasureCodec {
+public class MyCodec extends ErasureCodec {
     @Override
     public ErasureEncoder createEncoder() {
-        return new MonEncodeur(getCoderOptions());
+        return new MyEncoder(getCoderOptions());
     }
     
     @Override
     public ErasureDecoder createDecoder() {
-        return new MonDecodeur(getCoderOptions());
+        return new MyDecoder(getCoderOptions());
     }
 }
 ```
 
-### 2. Créer les Encodeurs/Décodeurs
+### 2. Create encoders/decoders
 ```java
-public class MonEncodeur extends ErasureEncoder {
+public class MyEncoder extends ErasureEncoder {
     @Override
     protected ErasureCodingStep prepareEncodingStep(ECBlockGroup blockGroup) {
         RawErasureEncoder rawEncoder = CodecUtil.createRawEncoder(
-            getConf(), "mon_codec", getOptions());
+            getConf(), "my_codec", getOptions());
         return new ErasureEncodingStep(
             getInputBlocks(blockGroup),
             getOutputBlocks(blockGroup),
@@ -158,117 +158,117 @@ public class MonEncodeur extends ErasureEncoder {
 }
 ```
 
-### 3. Créer les Raw Coders
+### 3. Create raw coders
 ```java
-public class MonRawEncoder extends RawErasureEncoder {
+public class MyRawEncoder extends RawErasureEncoder {
     @Override
     protected void doEncode(ByteArrayEncodingState encodingState) {
-        // Implémentation de l'algorithme mathématique
+        // Implement the math algorithm here
     }
     
     @Override
     protected void doEncode(ByteBufferEncodingState encodingState) {
-        // Version ByteBuffer optimisée
+        // Optimized ByteBuffer version
     }
 }
 ```
 
-### 4. Créer la Factory
+### 4. Create the factory
 ```java
-public class MonRawErasureCoderFactory implements RawErasureCoderFactory {
+public class MyRawErasureCoderFactory implements RawErasureCoderFactory {
     @Override
     public RawErasureEncoder createEncoder(ErasureCoderOptions coderOptions) {
-        return new MonRawEncoder(coderOptions);
+        return new MyRawEncoder(coderOptions);
     }
     
     @Override
     public RawErasureDecoder createDecoder(ErasureCoderOptions coderOptions) {
-        return new MonRawDecoder(coderOptions);
+        return new MyRawDecoder(coderOptions);
     }
     
     @Override
     public String getCoderName() {
-        return "mon_codec_java";
+        return "my_codec_java";
     }
     
     @Override
     public String getCodecName() {
-        return "mon_codec";
+        return "my_codec";
     }
 }
 ```
 
 ### 5. Registration
-- Ajouter le nom du codec dans `ErasureCodeConstants`
-- Configurer dans `CodecUtil.getCodecClassName()`
-- Créer le fichier META-INF/services pour ServiceLoader
+- Add codec name in `ErasureCodeConstants`
+- Configure in `CodecUtil.getCodecClassName()`
+- Create the META-INF/services file for ServiceLoader
 
-## Recommandations pour Nouveau Codec
+## Recommendations for a New Codec
 
-### 1. Choix d'Algorithme Simple
-- **Cauchy Reed-Solomon**: Bon compromis performance/capacité
-- **LDPC**: Efficace pour grandes tailles de blocs
-- **RaptorQ**: Optimisé pour streaming
+### 1. Algorithm choices
+- Cauchy Reed-Solomon: good performance/efficiency tradeoff
+- LDPC: effective for large block sizes
+- RaptorQ: optimized for streaming
 
-### 2. Considérations de Performance
-- Implémenter les deux versions (ByteBuffer et byte[])
-- Optimiser pour les cas courants
-- Gérer la mémoire efficacement
+### 2. Performance considerations
+- Implement both ByteBuffer and byte[] versions
+- Optimize for common cases
+- Manage memory efficiently
 
-### 3. Tests et Validation
-- Tests unitaires complets
-- Benchmarks de performance
-- Validation mathématique
+### 3. Tests and validation
+- Comprehensive unit tests
+- Performance benchmarks
+- Mathematical validation
 
 ## Conclusion
 
-L'architecture Hadoop des codes d'effacement est bien conçue avec une séparation claire des responsabilités. Elle permet l'ajout facile de nouveaux algorithmes tout en maintenant la compatibilité et les performances. Le système de registration automatique via ServiceLoader simplifie grandement l'intégration de nouveaux codecs.
+Hadoop’s erasure coding architecture is well designed with clear separation of concerns. It allows easy addition of new algorithms while maintaining compatibility and performance. The automatic registration system via ServiceLoader greatly simplifies integration of new codecs.
 
-## Points d'Intégration Concrets dans ce dépôt
+## Concrete Integration Points in this repository
 
 - `erasurecode/ErasureCodeConstants.java`
-  - Ajouter un nom de codec (ex: `raptorq`) et des schémas pratiques (k,m) pour tests.
+  - Add a codec name (e.g., `raptorq`) and practical schemas (k, m) for tests.
 - `erasurecode/CodecUtil.java`
-  - Ajouter le mapping du nom de codec vers la classe `ErasureCodec` concrète (clé `io.erasurecode.codec.raptorq`).
-  - Permettre la configuration des rawcoders via `io.erasurecode.codec.raptorq.rawcoders`.
-- `erasurecode/codec/` (nouvelle classe)
-  - `RaptorQErasureCodec` étend `ErasureCodec` et crée `RaptorQEncoder` / `RaptorQDecoder`.
-- `erasurecode/coder/` (nouvelles classes)
-  - `RaptorQEncoder` et `RaptorQDecoder` étendent respectivement `ErasureEncoder` / `ErasureDecoder` et délèguent aux rawcoders.
-- `erasurecode/rawcoder/` (nouvelles classes)
-  - `RaptorQRawEncoder` / `RaptorQRawDecoder` utilisent OpenRQ pour encoder/décoder des symboles à partir de ByteBuffer/byte[].
-  - `RaptorQRawErasureCoderFactory` pour ServiceLoader.
+  - Add the mapping from codec name to concrete `ErasureCodec` class (`io.erasurecode.codec.raptorq`).
+  - Allow configuring raw coders via `io.erasurecode.codec.raptorq.rawcoders`.
+- `erasurecode/codec/` (new class)
+  - `RaptorQErasureCodec` extends `ErasureCodec` and creates `RaptorQEncoder` / `RaptorQDecoder`.
+- `erasurecode/coder/` (new classes)
+  - `RaptorQEncoder` and `RaptorQDecoder` extend `ErasureEncoder` / `ErasureDecoder` and delegate to raw coders.
+- `erasurecode/rawcoder/` (new classes)
+  - `RaptorQRawEncoder` / `RaptorQRawDecoder` use OpenRQ to encode/decode symbols from ByteBuffer/byte[].
+  - `RaptorQRawErasureCoderFactory` for ServiceLoader.
 - `erasurecode/META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory`
-  - Ajouter `org.apache.hadoop.io.erasurecode.rawcoder.RaptorQRawErasureCoderFactory`.
+  - Add `org.apache.hadoop.io.erasurecode.rawcoder.RaptorQRawErasureCoderFactory`.
 
-## Différences conceptuelles RS vs RaptorQ à considérer
+## Conceptual differences RS vs RaptorQ to consider
 
-- **Système de symboles**: RS travaille sur k données fixes et m parités fixes; RaptorQ génère un nombre arbitraire de symboles de réparation. Pour Hadoop (qui attend m parités fixes), on configurera m symboles de réparation déterministes (m premiers ESIs) lors de l’encodage.
-- **Décodage**: Hadoop fournit une liste d’unités effacées à reconstruire; RaptorQ requiert ≥ k symboles quelconques pour résoudre le système. Nous fournirons au décodeur un ensemble minimal de symboles disponibles (k) + reconstruirons précisément les indices effacés.
-- **Taille d’unité**: Harmoniser la taille de chunk Hadoop avec la `symbolSize` OpenRQ. Ajouter un padding si nécessaire et retirer le padding après décodage.
-- **États & buffers**: Supporter `byte[]` et `ByteBuffer` dans `RawErasure{En,De}coder` pour performance.
+- Symbol system: RS works on fixed k data and m parity; RaptorQ generates an arbitrary number of repair symbols. For Hadoop (expects fixed m parities), we configure m deterministic repair symbols (first m ESIs) during encoding.
+- Decoding: Hadoop provides a list of erased units to reconstruct; RaptorQ requires ≥ k arbitrary symbols to solve. We feed the decoder a minimal set of available symbols (k) and reconstruct the precise erased indices.
+- Unit size: Align Hadoop chunk size with OpenRQ `symbolSize`. Add padding if needed and strip it after decoding.
+- State/buffers: Support both `byte[]` and `ByteBuffer` in `RawErasure{En,De}coder` for performance.
 
-## Implémentation RaptorQ ajoutée dans ce projet
+## RaptorQ implementation added in this project
 
 - `erasurecode/ErasureCodeConstants.java`
-  - Ajout du codec `raptorq` et de schémas d’exemple (6,3) et (10,4).
+  - Added `raptorq` codec and example schemas (6,3) and (10,4).
 - `erasurecode/CodecUtil.java`
-  - Résolution de `io.erasurecode.codec.raptorq` vers `codec.RaptorQErasureCodec`.
+  - Resolves `io.erasurecode.codec.raptorq` to `codec.RaptorQErasureCodec`.
 - `erasurecode/codec/RaptorQErasureCodec.java`
-  - Crée `coder.RaptorQEncoder` / `coder.RaptorQDecoder`.
+  - Creates `coder.RaptorQEncoder` / `coder.RaptorQDecoder`.
 - `erasurecode/coder/RaptorQEncoder.java` / `RaptorQDecoder.java`
-  - Adaptateurs qui délèguent vers les raw coders via `CodecUtil.createRawEncoder/Decoder`.
+  - Adapters delegating to raw coders via `CodecUtil.createRawEncoder/Decoder`.
 - `erasurecode/rawcoder/RaptorQRawErasureCoderFactory.java`
   - ServiceLoader: `coderName=raptorq_java`, `codecName=raptorq`.
 - `erasurecode/rawcoder/RaptorQRawEncoder.java`
-  - Concatène k inputs (taille T), `FECParameters(F=k*T, T, Z=1)`, génère m symboles de réparation ESI `K..K+m-1` et les écrit dans les sorties.
+  - Concatenates k inputs (size T), `FECParameters(F=k*T, T, Z=1)`, generates m repair symbols ESI `K..K+m-1`, writes to outputs.
 - `erasurecode/rawcoder/RaptorQRawDecoder.java`
-  - Alimente OpenRQ avec tous les symboles disponibles; si décodé, copie les données reconstruites sur les sorties data; parités effacées régénérées en re‑encodant.
+  - Feeds OpenRQ with all available symbols; on decode success, copies recovered data to outputs; erased parities regenerated by re-encoding.
 - `erasurecode/META-INF/services/...RawErasureCoderFactory`
-  - Enregistrement de la factory RaptorQ.
+  - Registers the RaptorQ factory.
 
-### Points d’attention / risques
-- Hypothèse de taille égale T pour toutes les unités d’un groupe. Si non vrai, prévoir un padding explicite.
-- RaptorQ peut échouer à N=K (probabiliste). Gestion d’erreur incluse côté raw decoder (IOException si échec) ; amélioration possible: marge d’overhead configurable.
-- La régénération de parité en décodage se fait par re‑encodage des données reconstruites pour ESI `K+index`.
-- Mémoire: implémentation actuelle fait une concaténation `k*T`; possible optimisation par streaming.
+### Points of attention / risks
+- Assumes equal size T across all units in a group. If not, add explicit padding.
+- RaptorQ may fail at N=K (probabilistic). Error handling included in raw decoder (IOException on failure); improvement: configurable overhead margin.
+- Parity regeneration in decoding is performed by re-encoding the reconstructed data for ESI `K+index`.
+- Memory: current implementation concatenates `k*T`; possible optimization by streaming.

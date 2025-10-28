@@ -20,7 +20,7 @@ Integrate a non-RS erasure code into Hadoop’s erasure coding framework using R
   - OpenRQ architecture/usage overview added (see `OpenRQ_Architecture_Diagram.md`).
 - Implementation: pending.
 
-### Living TODO (kept updated)
+### Living TODO 
 1. Design integration plan: where RaptorQ plugs into Hadoop EC layers [completed]
 2. Create codec scaffolding:
    - Add `raptorq` constants and config mapping in `ErasureCodeConstants.java` and `CodecUtil.java` [done]

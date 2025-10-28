@@ -1,49 +1,49 @@
-## OpenRQ (RaptorQ) – Architecture et Usage
+## OpenRQ (RaptorQ) – Architecture and Usage
 
-### Concepts clés
-- **RFC 6330 (RaptorQ)**: Code fountain systématique; peut générer un nombre illimité de symboles de réparation.
-- **Source block / sub-block**: OpenRQ partitionne les données en blocs; interleaving de sous-blocs non implémenté (max 1).
-- **Symboles**: Chaque bloc est découpé en symboles de taille fixe `symbolSize`.
-- **FEC parameters**: Encapsule `dataLength`, `symbolSize`, `symbolsPerBlock`.
+### Key concepts
+- RFC 6330 (RaptorQ): Systematic fountain code; can generate an unlimited number of repair symbols.
+- Source block / sub-block: OpenRQ partitions data into blocks; sub-block interleaving is not implemented (max 1).
+- Symbols: Each block is split into symbols of fixed size `symbolSize`.
+- FEC parameters: Encapsulates `dataLength`, `symbolSize`, `numberOfSourceBlocks`.
 
-### API principale (fichiers clés)
-- `net.fec.openrq.OpenRQ`: Point d’entrée; création d’encodeurs/décodeurs via `FECParameters`.
-- `parameters.FECParameters`: Paramètres de FEC (taille des données, taille symbole, nb symboles par bloc).
-- `encoder.DataEncoder` / `encoder.SourceBlockEncoder`: Encodage; produit des `EncodingPacket` (source ou réparation).
-- `decoder.DataDecoder` / `decoder.SourceBlockDecoder`: Décodage; consomme des `EncodingPacket` en ordre quelconque; restitue les octets du bloc.
-- `EncodingPacket` / `SerializablePacket`: Paquets transmissibles.
+### Main API (key files)
+- `net.fec.openrq.OpenRQ`: Entry point; creates encoders/decoders via `FECParameters`.
+- `parameters.FECParameters`: FEC parameters (data length, symbol size, number of source blocks).
+- `encoder.DataEncoder` / `encoder.SourceBlockEncoder`: Encoding; produces `EncodingPacket` (source or repair).
+- `decoder.DataDecoder` / `decoder.SourceBlockDecoder`: Decoding; consumes `EncodingPacket` in any order; yields block bytes.
+- `EncodingPacket` / `SerializablePacket`: Transmittable packets.
 
-### Encodage (schéma d’utilisation typique)
-1. Construire `FECParameters` avec `dataLength`, `symbolSize`, `symbolsPerBlock`.
-2. Créer `DataEncoder` via `OpenRQ.newEncoder(data, fecParams)`.
-3. Pour chaque `SourceBlockEncoder`:
-   - Émettre `k` paquets source et au besoin `m` paquets de réparation déterministes (ex: ESI = 0..m-1).
+### Encoding (typical usage)
+1. Build `FECParameters` with `dataLength`, `symbolSize`, `numberOfSourceBlocks`.
+2. Create `DataEncoder` via `OpenRQ.newEncoder(data, fecParams)`.
+3. For each `SourceBlockEncoder`:
+   - Emit `k` source packets and, if needed, `m` deterministic repair packets (e.g., ESI = 0..m-1).
 
-### Décodage (schéma d’utilisation typique)
-1. Créer `DataDecoder` via `OpenRQ.newDecoder(fecParams, dataLen)`.
-2. Remettre les paquets reçus (source et/ou réparation) au `SourceBlockDecoder`.
-3. Quand le nombre de symboles indépendants ≥ k, reconstruire le bloc et obtenir les octets.
+### Decoding (typical usage)
+1. Create `DataDecoder` via `OpenRQ.newDecoder(fecParams, symbolOverhead)`.
+2. Feed received packets (source and/or repair) to the `SourceBlockDecoder`.
+3. When the number of independent symbols ≥ `k`, reconstruct the block and obtain the bytes.
 
-### Intégration Hadoop (adaptation)
-- Hadoop attend k données + m parités fixes. Avec OpenRQ, on choisit les m premiers symboles de réparation pour former les m « parités ».
-- À l’encodage Hadoop, `RaptorQRawEncoder` génère ces m symboles de réparation pour chaque groupe de k chunks.
-- Au décodage Hadoop, `RaptorQRawDecoder` collecte un ensemble de ≥ k symboles disponibles (données+réparation) et reconstruit les chunks manquants.
-- Harmoniser `chunkSize` Hadoop et `symbolSize` OpenRQ; si besoin, padding des derniers symboles et dépadding après reconstruction.
+### Hadoop integration (adaptation)
+- Hadoop expects fixed `k` data + `m` parity units. With OpenRQ, choose the first `m` repair symbols to form the `m` “parities”.
+- On Hadoop encoding, `RaptorQRawEncoder` generates these `m` repair symbols for each group of `k` chunks.
+- On Hadoop decoding, `RaptorQRawDecoder` collects ≥ `k` available symbols (data+repair) and reconstructs missing chunks.
+- Align Hadoop `chunkSize` and OpenRQ `symbolSize`; if needed, pad trailing symbols and remove padding after reconstruction.
 
-### Détails d’implémentation (dans ce projet)
-- Encodage (byte[] et ByteBuffer):
-  - Concatène k entrées de taille T; `FECParameters(F=k*T, T, Z=1)`; génère m paquets de réparation ESI `K..K+m-1`; écrit les T octets dans les sorties.
-- Décodage (byte[] et ByteBuffer):
-  - Instancie un décodeur avec `FECParameters(F=k*T, T, Z=1)`; alimente le `SourceBlockDecoder` avec tous les symboles disponibles (source ESI `0..K-1`, réparation ESI `K..K+m-1`).
-  - Si le bloc source est décodé, copie les T octets reconstruits pour chaque data effacée. Pour parités effacées, régénère via re‑encodage des données reconstruites avec ESI `K+index`.
+### Implementation details (in this project)
+- Encoding (byte[] and ByteBuffer):
+  - Concatenate `k` inputs of size `T`; `FECParameters(F=k*T, T, Z=1)`; generate `m` repair packets with ESI `K..K+m-1`; write `T` bytes into parity outputs.
+- Decoding (byte[] and ByteBuffer):
+  - Instantiate a decoder with `FECParameters(F=k*T, T, Z=1)`; feed the `SourceBlockDecoder` with all available symbols (source ESI `0..K-1`, repair ESI `K..K+m-1`).
+  - If the source block decodes, copy the `T` recovered bytes for each erased data unit. For erased parities, regenerate via re-encoding of the recovered data with ESI `K+index`.
 
-### Pièges/limitations à suivre
-- **ESI mapping**: les entrées `i<k` sont mappées à ESI `i`; parités à ESI `K..K+m-1`. Changements casseraient la compatibilité des sorties.
-- **Taille T constante**: on suppose que chaque chunk Hadoop dans un groupe a la même longueur T; valider en amont. Pour les derniers fragments partiels, utiliser padding zéro symétrique (TODO si nécessaire).
-- **Probabiliste**: RaptorQ peut échouer à N=K; nous utilisons overhead=0 et attendons K symboles indépendants. En cas d’échec rare, gérer erreur et réessayer avec un symbole de réparation supplémentaire.
-- **Mémoire**: le chemin actuel concatène les k entrées en un buffer; pour de très grands T, envisager un traitement par segments.
+### Pitfalls/limitations to track
+- ESI mapping: inputs `i<k` map to ESI `i`; parities to `K..K+m-1`. Changing this breaks compatibility of outputs.
+- Constant size `T`: assumes each Hadoop chunk in a group has the same length; validate up front. For partial last symbols, add zero padding (future enhancement).
+- Probabilistic: RaptorQ can fail at `N=K`; we use overhead=0 and require `K` independent symbols. On rare failure, handle error and retry with an extra repair symbol.
+- Memory: current path concatenates `k` inputs into one buffer; for very large `T`, consider chunked processing.
 
-### Références
+### References
 - RFC 6330 — RaptorQ Fountain Code
 - Code: `OpenRQ-master/src/main/net/fec/openrq/*`
 
