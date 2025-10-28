@@ -30,10 +30,18 @@
 - Au décodage Hadoop, `RaptorQRawDecoder` collecte un ensemble de ≥ k symboles disponibles (données+réparation) et reconstruit les chunks manquants.
 - Harmoniser `chunkSize` Hadoop et `symbolSize` OpenRQ; si besoin, padding des derniers symboles et dépadding après reconstruction.
 
-### Limitations / Attention
-- Pas d’interleaving (sub-blocks > 1) dans OpenRQ.
-- Performance de décodage plus lente que certaines implémentations propriétaires (cf. README OpenRQ).
-- Gestion mémoire: privilégier ByteBuffer directs côté Hadoop quand possible; sinon basculer vers byte[].
+### Détails d’implémentation (dans ce projet)
+- Encodage (byte[] et ByteBuffer):
+  - Concatène k entrées de taille T; `FECParameters(F=k*T, T, Z=1)`; génère m paquets de réparation ESI `K..K+m-1`; écrit les T octets dans les sorties.
+- Décodage (byte[] et ByteBuffer):
+  - Instancie un décodeur avec `FECParameters(F=k*T, T, Z=1)`; alimente le `SourceBlockDecoder` avec tous les symboles disponibles (source ESI `0..K-1`, réparation ESI `K..K+m-1`).
+  - Si le bloc source est décodé, copie les T octets reconstruits pour chaque data effacée. Pour parités effacées, régénère via re‑encodage des données reconstruites avec ESI `K+index`.
+
+### Pièges/limitations à suivre
+- **ESI mapping**: les entrées `i<k` sont mappées à ESI `i`; parités à ESI `K..K+m-1`. Changements casseraient la compatibilité des sorties.
+- **Taille T constante**: on suppose que chaque chunk Hadoop dans un groupe a la même longueur T; valider en amont. Pour les derniers fragments partiels, utiliser padding zéro symétrique (TODO si nécessaire).
+- **Probabiliste**: RaptorQ peut échouer à N=K; nous utilisons overhead=0 et attendons K symboles indépendants. En cas d’échec rare, gérer erreur et réessayer avec un symbole de réparation supplémentaire.
+- **Mémoire**: le chemin actuel concatène les k entrées en un buffer; pour de très grands T, envisager un traitement par segments.
 
 ### Références
 - RFC 6330 — RaptorQ Fountain Code

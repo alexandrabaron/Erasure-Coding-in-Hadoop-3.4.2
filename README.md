@@ -27,8 +27,8 @@ Integrate a non-RS erasure code into Hadoop’s erasure coding framework using R
    - Create `codec/RaptorQErasureCodec.java` [done]
    - Create `coder/RaptorQEncoder.java`, `coder/RaptorQDecoder.java` [done]
 3. Implement raw coders:
-   - `rawcoder/RaptorQRawEncoder.java` (byte[] and ByteBuffer paths) [in progress: stubs]
-   - `rawcoder/RaptorQRawDecoder.java` (byte[] and ByteBuffer paths) [in progress: stubs]
+   - `rawcoder/RaptorQRawEncoder.java` (byte[] and ByteBuffer paths) [done]
+   - `rawcoder/RaptorQRawDecoder.java` (byte[] and ByteBuffer paths) [done]
    - `rawcoder/RaptorQRawErasureCoderFactory.java` [done]
    - Register in `META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory` [pending]
 4. Bridge with OpenRQ:
@@ -51,5 +51,6 @@ Integrate a non-RS erasure code into Hadoop’s erasure coding framework using R
 ### Notes
 - OpenRQ does not support sub-block interleaving (>1) but is RFC 6330 compliant.
 - Decoding throughput is acceptable for a prototype; focus on correctness and adapter fidelity first.
+- Assumptions: fixed chunk length T across k data units; ESI mapping data=0..K-1, parity=K..K+m-1.
 
 

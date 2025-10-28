@@ -247,3 +247,28 @@ L'architecture Hadoop des codes d'effacement est bien conçue avec une séparati
 - **Décodage**: Hadoop fournit une liste d’unités effacées à reconstruire; RaptorQ requiert ≥ k symboles quelconques pour résoudre le système. Nous fournirons au décodeur un ensemble minimal de symboles disponibles (k) + reconstruirons précisément les indices effacés.
 - **Taille d’unité**: Harmoniser la taille de chunk Hadoop avec la `symbolSize` OpenRQ. Ajouter un padding si nécessaire et retirer le padding après décodage.
 - **États & buffers**: Supporter `byte[]` et `ByteBuffer` dans `RawErasure{En,De}coder` pour performance.
+
+## Implémentation RaptorQ ajoutée dans ce projet
+
+- `erasurecode/ErasureCodeConstants.java`
+  - Ajout du codec `raptorq` et de schémas d’exemple (6,3) et (10,4).
+- `erasurecode/CodecUtil.java`
+  - Résolution de `io.erasurecode.codec.raptorq` vers `codec.RaptorQErasureCodec`.
+- `erasurecode/codec/RaptorQErasureCodec.java`
+  - Crée `coder.RaptorQEncoder` / `coder.RaptorQDecoder`.
+- `erasurecode/coder/RaptorQEncoder.java` / `RaptorQDecoder.java`
+  - Adaptateurs qui délèguent vers les raw coders via `CodecUtil.createRawEncoder/Decoder`.
+- `erasurecode/rawcoder/RaptorQRawErasureCoderFactory.java`
+  - ServiceLoader: `coderName=raptorq_java`, `codecName=raptorq`.
+- `erasurecode/rawcoder/RaptorQRawEncoder.java`
+  - Concatène k inputs (taille T), `FECParameters(F=k*T, T, Z=1)`, génère m symboles de réparation ESI `K..K+m-1` et les écrit dans les sorties.
+- `erasurecode/rawcoder/RaptorQRawDecoder.java`
+  - Alimente OpenRQ avec tous les symboles disponibles; si décodé, copie les données reconstruites sur les sorties data; parités effacées régénérées en re‑encodant.
+- `erasurecode/META-INF/services/...RawErasureCoderFactory`
+  - Enregistrement de la factory RaptorQ.
+
+### Points d’attention / risques
+- Hypothèse de taille égale T pour toutes les unités d’un groupe. Si non vrai, prévoir un padding explicite.
+- RaptorQ peut échouer à N=K (probabiliste). Gestion d’erreur incluse côté raw decoder (IOException si échec) ; amélioration possible: marge d’overhead configurable.
+- La régénération de parité en décodage se fait par re‑encodage des données reconstruites pour ESI `K+index`.
+- Mémoire: implémentation actuelle fait une concaténation `k*T`; possible optimisation par streaming.
