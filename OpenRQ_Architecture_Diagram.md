@@ -53,35 +53,28 @@
 ```mermaid
 flowchart TD
     subgraph Sender
-      A[Source Data (bytes)] -- Partition --> B[Source Blocks]
-      B -- Split into symbols of size T --> C[Source Symbols (K)]
-      C -- OpenRQ::DataEncoder --> D[SourceBlockEncoder]
-      D -- Emit K source packets (ESI 0..K-1) --> E1[Source Packets]
-      D -- Emit m repair packets (ESI K..K+m-1) --> E2[Repair Packets]
+        A[Source Data] -- Partition --> B[Source Blocks]
+        B -- Split into symbols --> C[Source Symbols]
+        C -- DataEncoder --> D[SourceBlockEncoder]
+        D -- Source Packets ESI 0-K-1 --> E1[Source Packets]
+        D -- Repair Packets ESI K-K+m-1 --> E2[Repair Packets]
     end
 
-    E1 -. Any order / any subset .-> Net((Network))
-    E2 -. Any order / any subset .-> Net
+    E1 -.-> Net
+    E2 -.-> Net
 
     subgraph Receiver
-      Net -. Deliver .-> F[Packets Arrive]
-      F -- Parse & Validate --> G[OpenRQ::DataDecoder]
-      G --> H[SourceBlockDecoder]
-      H -- If >= K independent symbols --> I[Decode (linear system)]
-      I --> J[Recovered Source Symbols]
-      J --> K[Reassembled Source Block]
-      K --> L[Concatenate Blocks]
-      L --> M[Reconstructed Source Data]
+        Net -.-> F[Packets Arrive]
+        F -- Parse --> G[DataDecoder]
+        G --> H[SourceBlockDecoder]
+        H -- If K symbols --> I[Decode]
+        I --> J[Recovered Symbols]
+        J --> K[Reassembled Block]
+        K --> L[Concatenate]
+        L --> M[Reconstructed Data]
     end
 
-    %% Hadoop adapter mapping
-    subgraph Hadoop_Adapter
-      HA1[Inputs: k data chunks of size T] -- Concatenate --> HA2[k*T contiguous]
-      HA2 -- Encode m repair ESIs K..K+m-1 --> HA3[m parity chunks]
-      HB1[Inputs: data+parity with erasures] -- Feed available packets --> HB2[Decode]
-      HB2 -- Recovered data --> HB3[Fill erased data chunks]
-      HB2 -- Regenerate parity via re-encode --> HB4[Fill erased parity chunks]
-    end
+    Net(("Network"))
 ```
 
 
