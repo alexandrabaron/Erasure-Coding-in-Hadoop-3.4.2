@@ -23,7 +23,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.erasurecode.codec.ErasureCodec;
 import org.apache.hadoop.io.erasurecode.codec.HHXORErasureCodec;
 import org.apache.hadoop.io.erasurecode.codec.RSErasureCodec;
-import org.apache.hadoop.io.erasurecode.codec.RaptorQErasureCodec;
 import org.apache.hadoop.io.erasurecode.codec.XORErasureCodec;
 import org.apache.hadoop.io.erasurecode.coder.ErasureDecoder;
 import org.apache.hadoop.io.erasurecode.coder.ErasureEncoder;
@@ -68,11 +67,6 @@ public final class CodecUtil {
       IO_ERASURECODE_CODEC + "hhxor";
   public static final String IO_ERASURECODE_CODEC_HHXOR =
       HHXORErasureCodec.class.getCanonicalName();
-  /** Erasure coder RaptorQ codec. */
-  public static final String IO_ERASURECODE_CODEC_RAPTORQ_KEY =
-      IO_ERASURECODE_CODEC + "raptorq";
-  public static final String IO_ERASURECODE_CODEC_RAPTORQ =
-      RaptorQErasureCodec.class.getCanonicalName();
 
   /** Comma separated raw codec name. The first coder is prior to the latter. */
   public static final String IO_ERASURECODE_CODEC_RS_LEGACY_RAWCODERS_KEY =
@@ -83,10 +77,6 @@ public final class CodecUtil {
   /** Raw coder factory for the XOR codec. */
   public static final String IO_ERASURECODE_CODEC_XOR_RAWCODERS_KEY =
       IO_ERASURECODE_CODEC + "xor.rawcoders";
-
-  /** Raw coder factory for the RaptorQ codec. */
-  public static final String IO_ERASURECODE_CODEC_RAPTORQ_RAWCODERS_KEY =
-      IO_ERASURECODE_CODEC + "raptorq.rawcoders";
 
   public static final String IO_ERASURECODE_CODEC_NATIVE_ENABLED_KEY =
       IO_ERASURECODE_CODEC + "native.enabled";
@@ -282,10 +272,6 @@ public final class CodecUtil {
       return conf.get(
           CodecUtil.IO_ERASURECODE_CODEC_HHXOR_KEY,
           CodecUtil.IO_ERASURECODE_CODEC_HHXOR);
-    case ErasureCodeConstants.RAPTORQ_CODEC_NAME:
-      return conf.get(
-          CodecUtil.IO_ERASURECODE_CODEC_RAPTORQ_KEY,
-          CodecUtil.IO_ERASURECODE_CODEC_RAPTORQ);
     default:
       // For custom codec, we throw exception if the factory is not configured
       String codecKey = "io.erasurecode.codec." + codec + ".coder";
