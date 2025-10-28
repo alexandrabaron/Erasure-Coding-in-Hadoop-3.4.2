@@ -223,3 +223,27 @@ public class MonRawErasureCoderFactory implements RawErasureCoderFactory {
 ## Conclusion
 
 L'architecture Hadoop des codes d'effacement est bien conçue avec une séparation claire des responsabilités. Elle permet l'ajout facile de nouveaux algorithmes tout en maintenant la compatibilité et les performances. Le système de registration automatique via ServiceLoader simplifie grandement l'intégration de nouveaux codecs.
+
+## Points d'Intégration Concrets dans ce dépôt
+
+- `erasurecode/ErasureCodeConstants.java`
+  - Ajouter un nom de codec (ex: `raptorq`) et des schémas pratiques (k,m) pour tests.
+- `erasurecode/CodecUtil.java`
+  - Ajouter le mapping du nom de codec vers la classe `ErasureCodec` concrète (clé `io.erasurecode.codec.raptorq`).
+  - Permettre la configuration des rawcoders via `io.erasurecode.codec.raptorq.rawcoders`.
+- `erasurecode/codec/` (nouvelle classe)
+  - `RaptorQErasureCodec` étend `ErasureCodec` et crée `RaptorQEncoder` / `RaptorQDecoder`.
+- `erasurecode/coder/` (nouvelles classes)
+  - `RaptorQEncoder` et `RaptorQDecoder` étendent respectivement `ErasureEncoder` / `ErasureDecoder` et délèguent aux rawcoders.
+- `erasurecode/rawcoder/` (nouvelles classes)
+  - `RaptorQRawEncoder` / `RaptorQRawDecoder` utilisent OpenRQ pour encoder/décoder des symboles à partir de ByteBuffer/byte[].
+  - `RaptorQRawErasureCoderFactory` pour ServiceLoader.
+- `erasurecode/META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory`
+  - Ajouter `org.apache.hadoop.io.erasurecode.rawcoder.RaptorQRawErasureCoderFactory`.
+
+## Différences conceptuelles RS vs RaptorQ à considérer
+
+- **Système de symboles**: RS travaille sur k données fixes et m parités fixes; RaptorQ génère un nombre arbitraire de symboles de réparation. Pour Hadoop (qui attend m parités fixes), on configurera m symboles de réparation déterministes (m premiers ESIs) lors de l’encodage.
+- **Décodage**: Hadoop fournit une liste d’unités effacées à reconstruire; RaptorQ requiert ≥ k symboles quelconques pour résoudre le système. Nous fournirons au décodeur un ensemble minimal de symboles disponibles (k) + reconstruirons précisément les indices effacés.
+- **Taille d’unité**: Harmoniser la taille de chunk Hadoop avec la `symbolSize` OpenRQ. Ajouter un padding si nécessaire et retirer le padding après décodage.
+- **États & buffers**: Supporter `byte[]` et `ByteBuffer` dans `RawErasure{En,De}coder` pour performance.
