@@ -98,7 +98,7 @@ public final class CodecRegistry {
           // set native coders as default if user does not
           // specify a fallback order
           if (coderFactory instanceof NativeRSRawErasureCoderFactory ||
-                  coderFactory instanceof NativeXORRawErasureCoderFactory) {
+              coderFactory instanceof NativeXORRawErasureCoderFactory) {
             coders.add(0, coderFactory);
           } else {
             coders.add(coderFactory);

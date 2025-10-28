@@ -30,6 +30,7 @@ public final class ErasureCodeConstants {
   public static final String RS_LEGACY_CODEC_NAME = "rs-legacy";
   public static final String XOR_CODEC_NAME = "xor";
   public static final String HHXOR_CODEC_NAME = "hhxor";
+  public static final String RAPTORQ_CODEC_NAME = "raptorq";
   public static final String REPLICATION_CODEC_NAME = "replication";
 
   public static final ECSchema RS_6_3_SCHEMA = new ECSchema(
@@ -49,6 +50,12 @@ public final class ErasureCodeConstants {
 
   public static final ECSchema REPLICATION_1_2_SCHEMA = new ECSchema(
       REPLICATION_CODEC_NAME, 1, 2);
+
+  // Example RaptorQ schemas (tunable during testing)
+  public static final ECSchema RAPTORQ_6_3_SCHEMA = new ECSchema(
+      RAPTORQ_CODEC_NAME, 6, 3);
+  public static final ECSchema RAPTORQ_10_4_SCHEMA = new ECSchema(
+      RAPTORQ_CODEC_NAME, 10, 4);
 
   public static final byte MAX_POLICY_ID = Byte.MAX_VALUE;
   public static final byte USER_DEFINED_POLICY_START_ID = (byte) 64;

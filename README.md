@@ -21,15 +21,15 @@ Integrate a non-RS erasure code into Hadoop’s erasure coding framework using R
 - Implementation: pending.
 
 ### Living TODO (kept updated)
-1. Design integration plan: where RaptorQ plugs into Hadoop EC layers [pending]
+1. Design integration plan: where RaptorQ plugs into Hadoop EC layers [completed]
 2. Create codec scaffolding:
-   - Add `raptorq` constants and config mapping in `ErasureCodeConstants.java` and `CodecUtil.java` [pending]
-   - Create `codec/RaptorQErasureCodec.java` [pending]
-   - Create `coder/RaptorQEncoder.java`, `coder/RaptorQDecoder.java` [pending]
+   - Add `raptorq` constants and config mapping in `ErasureCodeConstants.java` and `CodecUtil.java` [done]
+   - Create `codec/RaptorQErasureCodec.java` [done]
+   - Create `coder/RaptorQEncoder.java`, `coder/RaptorQDecoder.java` [done]
 3. Implement raw coders:
-   - `rawcoder/RaptorQRawEncoder.java` (byte[] and ByteBuffer paths) [pending]
-   - `rawcoder/RaptorQRawDecoder.java` (byte[] and ByteBuffer paths) [pending]
-   - `rawcoder/RaptorQRawErasureCoderFactory.java` [pending]
+   - `rawcoder/RaptorQRawEncoder.java` (byte[] and ByteBuffer paths) [in progress: stubs]
+   - `rawcoder/RaptorQRawDecoder.java` (byte[] and ByteBuffer paths) [in progress: stubs]
+   - `rawcoder/RaptorQRawErasureCoderFactory.java` [done]
    - Register in `META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory` [pending]
 4. Bridge with OpenRQ:
    - Decide `symbolSize == chunkSize` policy; implement padding/removal [pending]

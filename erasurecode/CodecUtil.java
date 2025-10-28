@@ -68,6 +68,11 @@ public final class CodecUtil {
   public static final String IO_ERASURECODE_CODEC_HHXOR =
       HHXORErasureCodec.class.getCanonicalName();
 
+  /** Erasure coder RaptorQ codec (custom). */
+  public static final String IO_ERASURECODE_CODEC_RAPTORQ_KEY =
+      IO_ERASURECODE_CODEC + "raptorq";
+  // Note: class name must be configured externally if not present
+
   /** Comma separated raw codec name. The first coder is prior to the latter. */
   public static final String IO_ERASURECODE_CODEC_RS_LEGACY_RAWCODERS_KEY =
       IO_ERASURECODE_CODEC + "rs-legacy.rawcoders";
@@ -272,6 +277,11 @@ public final class CodecUtil {
       return conf.get(
           CodecUtil.IO_ERASURECODE_CODEC_HHXOR_KEY,
           CodecUtil.IO_ERASURECODE_CODEC_HHXOR);
+    case ErasureCodeConstants.RAPTORQ_CODEC_NAME:
+      // Allow external configuration of the codec class
+      return conf.get(
+          CodecUtil.IO_ERASURECODE_CODEC_RAPTORQ_KEY,
+          "org.apache.hadoop.io.erasurecode.codec.RaptorQErasureCodec");
     default:
       // For custom codec, we throw exception if the factory is not configured
       String codecKey = "io.erasurecode.codec." + codec + ".coder";
