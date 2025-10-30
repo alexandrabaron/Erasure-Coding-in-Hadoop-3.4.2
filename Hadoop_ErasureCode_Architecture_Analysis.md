@@ -272,3 +272,17 @@ Hadoop’s erasure coding architecture is well designed with clear separation of
 - RaptorQ may fail at N=K (probabilistic). Error handling included in raw decoder (IOException on failure); improvement: configurable overhead margin.
 - Parity regeneration in decoding is performed by re-encoding the reconstructed data for ESI `K+index`.
 - Memory: current implementation concatenates `k*T`; possible optimization by streaming.
+
+## Integration wiring added in this repository
+
+- Service discovery (ServiceLoader)
+  - `META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory` must include:
+    - `org.apache.hadoop.io.erasurecode.rawcoder.RaptorQRawErasureCoderFactory`
+  - In this repo, we also keep a services file at project root (`org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory`) for convenience when running without JAR packaging. Ensure one of these is on the runtime classpath.
+
+- HDFS built-in policy
+  - `SystemErasureCodingPolicies.java` now includes a RaptorQ policy:
+    - ID: `6`
+    - Schema: `ErasureCodeConstants.RAPTORQ_6_3_SCHEMA` (k=6, m=3)
+    - Cell size: 1MB (default)
+  - This makes the policy selectable via HDFS admin tooling.

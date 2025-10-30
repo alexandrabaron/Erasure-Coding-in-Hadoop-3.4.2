@@ -61,6 +61,7 @@ Notes:
 - All K data chunks in a group must have equal size T. If not, introduce padding (future enhancement).
 - ServiceLoader registration requires the file to be present on the runtime classpath at `META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory`. Ensure this path is packaged in the JAR under resources when building.
 - Make sure OpenRQ (`net.fec.openrq.*`) classes are on the compile/runtime classpath (include the OpenRQ sources or JAR).
+- HDFS policy wiring: we added a built-in policy `RAPTORQ_6_3` (id=6) in `SystemErasureCodingPolicies.java` using schema `(k=6, m=3, cellSize=1MB)`. Enable it via HDFS tooling like any built-in policy.
 
 ## Build and Test
 
