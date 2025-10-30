@@ -19,6 +19,7 @@ package org.apache.hadoop.io.erasurecode.coder;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.io.erasurecode.CodecUtil;
+import org.apache.hadoop.io.erasurecode.ECBlock;
 import org.apache.hadoop.io.erasurecode.ECBlockGroup;
 import org.apache.hadoop.io.erasurecode.ErasureCodeConstants;
 import org.apache.hadoop.io.erasurecode.ErasureCoderOptions;
@@ -36,7 +37,11 @@ public class RaptorQDecoder extends ErasureDecoder {
     RawErasureDecoder rawDecoder = CodecUtil.createRawDecoder(getConf(),
         ErasureCodeConstants.RAPTORQ_CODEC_NAME, getOptions());
 
-    return new ErasureDecodingStep(getInputBlocks(blockGroup),
-        getOutputBlocks(blockGroup), rawDecoder);
+    ECBlock[] inputBlocks = getInputBlocks(blockGroup);
+
+    return new ErasureDecodingStep(inputBlocks,
+            getErasedIndexes(inputBlocks),
+            getOutputBlocks(blockGroup), rawDecoder);
+
   }
 }

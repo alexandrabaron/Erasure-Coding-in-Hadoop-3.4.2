@@ -24,6 +24,10 @@ import net.fec.openrq.OpenRQ;
 import net.fec.openrq.ArrayDataDecoder;
 import net.fec.openrq.EncodingPacket;
 import net.fec.openrq.Parsed;
+
+import net.fec.openrq.encoder.DataEncoder;
+import net.fec.openrq.encoder.SourceBlockEncoder;
+
 import net.fec.openrq.decoder.DataDecoder;
 import net.fec.openrq.decoder.SourceBlockDecoder;
 import net.fec.openrq.parameters.FECParameters;
