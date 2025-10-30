@@ -69,22 +69,6 @@ Notes:
 - JDK 8+ installed and on PATH
 - Windows PowerShell (commands below use PowerShell syntax)
 
-### Compile
-We compile all Java sources (Hadoop EC + OpenRQ + tests) into a single `out/` folder.
-
-PowerShell:
-
-```powershell
-mkdir out -ErrorAction SilentlyContinue | Out-Null
-$cp = "OpenRQ-master/src/main;."  # classpath with OpenRQ sources and project root
-$sources = Get-ChildItem -Recurse -Filter *.java | ForEach-Object { $_.FullName }
-javac -encoding UTF-8 -cp $cp -d out $sources
-```
-
-Notes:
-- The classpath uses `;` as a separator on Windows. If you run on macOS/Linux, replace `;` with `:`.
-- If you package OpenRQ as a JAR instead, point `-cp` to that JAR instead of the source folder.
-
 ### Run tests
 Tests live under `tests/org/apache/hadoop/io/erasurecode/` and provide a simple main runner.
 
