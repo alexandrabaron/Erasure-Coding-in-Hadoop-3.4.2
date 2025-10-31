@@ -102,9 +102,20 @@ OK: RaptorQRawCoder tests passed
 ```
 
 ### Troubleshooting
-- Class not found for OpenRQ (`net.fec.openrq.*`): ensure `OpenRQ-master/src/main` (or its JAR) is on `-cp` both at compile-time and runtime.
-- ServiceLoader factory not discovered: verify `erasurecode/META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory` is on the runtime classpath (packaged in resources when building a JAR). For raw `javac/java` runs, classes are loaded directly and ServiceLoader registration is used by higher-level Hadoop flows; the tests instantiate the raw coders directly.
-- OutOfMemoryError for very large chunk sizes (T): current implementation concatenates `k*T` into a buffer; reduce T during testing or refactor to streaming.
+
+#### Classpath issues
+- **Class not found for OpenRQ (`net.fec.openrq.*`)**: ensure `OpenRQ-master/src/main` (or its JAR) is on `-cp` both at compile-time and runtime.
+- **ServiceLoader factory not discovered**: verify `erasurecode/META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory` is on the runtime classpath (packaged in resources when building a JAR). For raw `javac/java` runs, classes are loaded directly and ServiceLoader registration is used by higher-level Hadoop flows; the tests instantiate the raw coders directly.
+
+#### HDFS cluster requirements
+- **"The number of DataNodes is only 0"** or **"N DataNodes are required for the erasure coding policies. The number of DataNodes is only M"**:
+  - This is expected: HDFS enforces that you have at least `k+m` DataNodes to enable an EC policy.
+  - For RAPTORQ-6-3, you need at least 9 DataNodes (6 data + 3 parity).
+  - **To test the code logic without HDFS**, use the unit test (`RaptorQRawCoderTest`) which doesn't require a cluster.
+  - **To test with HDFS**: start a mini-cluster with 9+ DataNodes, or temporarily use a smaller schema like (k=2, m=1) that only needs 3 DataNodes.
+
+#### Performance
+- **OutOfMemoryError for very large chunk sizes (T)**: current implementation concatenates `k*T` into a buffer; reduce T during testing or refactor to streaming.
 
 ### Notes
 - OpenRQ does not support sub-block interleaving (>1) but is RFC 6330 compliant.
