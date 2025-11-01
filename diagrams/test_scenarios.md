@@ -5,7 +5,7 @@ graph TB
     subgraph TestSuite[RaptorQRawCoderTest]
         TS1[Unit Test Suite]
         
-        subgraph ByteArray[byte[] API Tests]
+        subgraph ByteArray["byte[] API Tests"]
             BA1[Test 1: k=6, m=3, T=1024<br/>2 erasures<br/>Random data]
             BA2[Encode k data blocks]
             BA3[Generate m parity blocks]
@@ -13,7 +13,7 @@ graph TB
             BA5[Decode and verify<br/>Byte-level equality]
         end
         
-        subgraph ByteBuffer[ByteBuffer API Tests]
+        subgraph ByteBuffer["ByteBuffer API Tests"]
             BB1[Test 2: k=6, m=3, T=2048<br/>3 erasures<br/>Random data]
             BB2[Encode k data blocks]
             BB3[Generate m parity blocks]
@@ -47,7 +47,7 @@ graph TB
     BA1 --> BA2 --> BA3 --> BA4 --> BA5
     BB1 --> BB2 --> BB3 --> BB4 --> BB5
     
-    Validation --> Pass[All Tests Pass ✓]
+    Validation --> Pass["All Tests Pass ✓"]
     
     style Pass fill:#4CAF50,color:#fff
     style BA1 fill:#E3F2FD

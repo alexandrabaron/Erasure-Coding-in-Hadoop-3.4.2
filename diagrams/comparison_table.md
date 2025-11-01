@@ -14,7 +14,7 @@ graph TB
         end
         
         subgraph RQ[RaptorQ]
-            RQ1[Fountain Code<br/>k+ε symbols typically needed]
+            RQ1[Fountain Code<br/>k+epsilon symbols typically needed]
             RQ2[LT Code + Pre-coding<br/>More complex operations]
             RQ3[Unlimited repair symbols<br/>On-demand generation]
             RQ4[Moderate performance<br/>Java implementation]

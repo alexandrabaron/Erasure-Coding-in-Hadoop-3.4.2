@@ -15,7 +15,7 @@ sequenceDiagram
     EC->>Dec: createDecoder()
     Dec->>RawDec: createRawDecoder()
     
-    RawDec->>OpenRQ: FECParameters(k×T, T, 1)
+    RawDec->>OpenRQ: FECParameters(k*T, T, 1)
     RawDec->>OpenRQ: newDecoderWithZeroOverhead(params)
     RawDec->>OpenRQ: sourceBlock(0)
     
