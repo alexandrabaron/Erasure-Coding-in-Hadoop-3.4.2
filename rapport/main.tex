@@ -29,98 +29,153 @@
 \end{figure}
 
 \begin{abstract}
-Your abstract.
+This report presents the implementation of RaptorQ erasure coding as an alternative to Reed-Solomon in Hadoop 3.4.2. We leverage the OpenRQ library, an open-source RFC 6330 RaptorQ implementation, and integrate it into Hadoop's three-layer erasure coding architecture. Our implementation adapts RaptorQ's fountain code model to Hadoop's fixed-parity requirements through deterministic ESI mapping and parity regeneration strategies. Comprehensive unit tests validate encoding and decoding correctness across various erasure scenarios. This work demonstrates the extensibility of Hadoop's erasure coding framework while providing insights into the trade-offs between deterministic and probabilistic erasure coding approaches.
 \end{abstract}
 
 \section{Introduction}
 
-Your introduction goes here! Simply start writing your document and use the Recompile button to view the updated PDF preview. Examples of commonly used commands and features are listed below, to help you get started.
+Distributed storage systems face the challenge of maintaining data durability and availability in the presence of node failures. Traditional replication strategies, while simple, incur significant storage overhead. Erasure coding (EC) provides a storage-efficient alternative by encoding data into $k$ data blocks and $m$ parity blocks, allowing reconstruction of the original data from any $k$ out of $k+m$ blocks.
 
-Once you're familiar with the editor, you can find various project settings in the Overleaf menu, accessed via the button in the very top left of the editor.
+Hadoop 3.x introduced erasure coding support, with Reed-Solomon (RS) as the primary algorithm. While RS is deterministic and well-understood, it has limitations in certain scenarios, particularly in streaming applications where fountain codes like RaptorQ offer advantages.
 
-\section{Some examples to get started}
+This project aims to implement RaptorQ erasure coding in Hadoop 3.4.2, providing an alternative to Reed-Solomon that offers probabilistic decoding and the ability to generate an unlimited number of repair symbols. The implementation integrates the OpenRQ library, a Java implementation of RFC 6330 RaptorQ, into Hadoop's existing erasure coding framework.
 
-\subsection{How to create Sections and Subsections}
+\section{Background and Motivation}
 
-Simply use the section and subsection commands, as in this example document! With Overleaf, all the formatting and numbering is handled automatically according to the template you've chosen. If you're using Rich Text mode, you can also create new section and subsections via the buttons in the editor toolbar.
+\subsection{Erasure Coding in Hadoop}
 
-\subsection{How to include Figures}
+Hadoop implements a three-layer erasure coding architecture that separates concerns and enables extensibility. Table \ref{tab:comparison} provides a comparison between Reed-Solomon and RaptorQ approaches.
 
-First you have to upload the image file from your computer using the upload link in the file-tree menu. Then use the includegraphics command to include it in your document. Use the figure environment and the caption command to add a number and a caption to your figure. See the code for Figure \ref{fig:frog} in this section for an example.
-
-Note that your figure will automatically be placed in the most appropriate place for it, given the surrounding text and taking into account other figures or tables that may be close by.
-
-\begin{figure}
+\begin{table}[h]
 \centering
-\includegraphics[width=0.25\linewidth]{frog.jpg}
-\caption{\label{fig:frog}This frog was uploaded via the file-tree menu.}
-\end{figure}
-
-\subsection{How to add Tables}
-
-Use the table and tabular environments for basic tables --- see Table~\ref{tab:widgets}, for example.
-
-\begin{table}
-\centering
-\begin{tabular}{l|r}
-Item & Quantity \\\hline
-Widgets & 42 \\
-Gadgets & 13
+\begin{tabular}{|p{5cm}|p{5cm}|}
+\hline
+\textbf{Reed-Solomon} & \textbf{RaptorQ} \\\hline
+Deterministic (exact $k$ symbols) & Fountain code ($k+\epsilon$ symbols) \\\hline
+Finite field arithmetic (GF256) & LT code + pre-coding \\\hline
+Fixed $m$ parity symbols & Unlimited repair symbols \\\hline
+Well-optimized native implementations & Moderate performance (Java) \\\hline
+Always succeeds with $k$ symbols & Probabilistic (rare failures) \\\hline
 \end{tabular}
-\caption{\label{tab:widgets}An example table.}
+\caption{\label{tab:comparison}Key differences between Reed-Solomon and RaptorQ}
 \end{table}
 
-\subsection{How to add Comments and Track Changes}
+Hadoop's current architecture expects exactly $m$ parity blocks, requiring adaptation of RaptorQ's unlimited symbol generation model while preserving its fountain code properties.
 
-Comments can be added to your project by highlighting some text and clicking ``Add comment'' in the top right of the editor pane. To view existing comments, click on the Review menu in the toolbar above. To reply to a comment, click on the Reply button in the lower right corner of the comment. You can close the Review pane by clicking its name on the toolbar when you're done reviewing for the time being.
+\section{Hadoop Erasure Coding Architecture}
 
-Track changes are available on all our premium plans, and can be toggled on or off using the option at the top of the Review pane. Track changes allow you to keep track of every change made to the document, along with the person making the change.
+Hadoop's erasure coding follows a three-layer architecture (illustrated in Figure \ref{fig:architecture}):
 
-\subsection{How to add Lists}
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.9\textwidth]{diagrams/hadoop_architecture.png}
+\caption{\label{fig:architecture}Hadoop erasure coding architecture with RaptorQ integration}
+\end{figure}
 
-You can make lists with automatic numbering \dots
-
-\begin{enumerate}
-\item Like this,
-\item and like this.
-\end{enumerate}
-\dots or bullet points \dots
 \begin{itemize}
-\item Like this,
-\item and like this.
+\item \textbf{Codec Layer}: Defines codec interfaces and creates encoders/decoders. We implemented \texttt{RaptorQErasureCodec} following the pattern of existing codecs.
+\item \textbf{Coder Layer}: Manages block groups and delegates to raw coders. \texttt{RaptorQEncoder/Decoder} handle Hadoop-specific concerns.
+\item \textbf{RawCoder Layer}: Performs mathematical operations on byte arrays/ByteBuffers. Our \texttt{RaptorQRawEncoder/Decoder} integrate with OpenRQ.
 \end{itemize}
 
-\subsection{How to write Mathematics}
+ServiceLoader registration enables automatic factory discovery. Configuration maps codec names to classes via \texttt{io.erasurecode.codec.raptorq}.
 
-\LaTeX{} is great at typesetting mathematics. Let $X_1, X_2, \ldots, X_n$ be a sequence of independent and identically distributed random variables with $\text{E}[X_i] = \mu$ and $\text{Var}[X_i] = \sigma^2 < \infty$, and let
-\[S_n = \frac{X_1 + X_2 + \cdots + X_n}{n}
-      = \frac{1}{n}\sum_{i}^{n} X_i\]
-denote their mean. Then as $n$ approaches infinity, the random variables $\sqrt{n}(S_n - \mu)$ converge in distribution to a normal $\mathcal{N}(0, \sigma^2)$.
+\section{RaptorQ and OpenRQ Library}
 
+RaptorQ (RFC 6330) is a fountain code that encodes data into fixed-size symbols and can generate unlimited repair symbols. Any $k$ independent symbols suffice for reconstruction with high probability.
 
-\subsection{How to change the margins and paper size}
+OpenRQ provides the Java implementation with key classes: \texttt{FECParameters} (encoding parameters), \texttt{DataEncoder/Decoder} (high-level interfaces), and \texttt{SourceBlockEncoder/Decoder} (per-block operations).
 
-Usually the template you're using will have the page margins and paper size set correctly for that use-case. For example, if you're using a journal article template provided by the journal publisher, that template will be formatted according to their requirements. In these cases, it's best not to alter the margins directly.
+\subsection{Adaptation Challenges}
 
-If however you're using a more general template, such as this one, and would like to alter the margins, a common way to do so is via the geometry package. You can find the geometry package loaded in the preamble at the top of this example file.
+The primary challenge is adapting RaptorQ's unlimited symbol model to Hadoop's fixed-$m$ requirement. Figure \ref{fig:esi-mapping} illustrates our deterministic ESI mapping strategy.
 
-\subsection{How to change the document language and spell check settings}
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{diagrams/esi_mapping.png}
+\caption{\label{fig:esi-mapping}ESI mapping: Hadoop blocks to RaptorQ symbols}
+\end{figure}
 
-Overleaf supports many different languages, including multiple different languages within one document.
+We map data blocks to source symbols (ESI $0..k-1$) and parity blocks to repair symbols (ESI $k..k+m-1$), ensuring deterministic parity generation while preserving fountain code properties.
 
-To configure the document language, simply edit the option provided to the babel package in the preamble at the top of this example project.
+\section{Implementation}
 
-To change the spell check language, simply open the Overleaf menu at the top left of the editor window, scroll down to the spell check setting, and adjust accordingly.
+We implement across Hadoop's three layers: \texttt{RaptorQErasureCodec} (codec), \texttt{RaptorQEncoder/Decoder} (coders), and \texttt{RaptorQRawEncoder/Decoder} (raw coders with OpenRQ).
 
-\subsection{How to add Citations and a References List}
+Figures \ref{fig:encoding} and \ref{fig:decoding} illustrate the encoding and decoding flows.
 
-You can simply upload a \verb|.bib| file containing your BibTeX entries, created with a tool such as JabRef. You can then cite entries from it, like this: \cite{greenwade93}. Just remember to specify a bibliography style, as well as the filename of the \verb|.bib|.
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{diagrams/raptorq_encoding.png}
+\caption{\label{fig:encoding}RaptorQ encoding flow in Hadoop}
+\end{figure}
 
-\subsection{Good luck!}
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{diagrams/raptorq_decoding.png}
+\caption{\label{fig:decoding}RaptorQ decoding flow with parity regeneration}
+\end{figure}
 
-We hope you find Overleaf useful!
+\textbf{Encoding}: Concatenate $k$ chunks ($k \times T$ bytes), create \texttt{FECParameters}, generate $m$ repair symbols (ESI $k..k+m-1$), write to parity outputs.
 
-\bibliographystyle{alpha}
-\bibliography{sample}
+\textbf{Decoding}: Build matching \texttt{FECParameters}, feed available symbols to decoder, extract recovered data; for erased parity, re-encode to regenerate.
+
+\subsection{Implementation Details}
+
+We support both \texttt{byte[]} and \texttt{ByteBuffer} APIs for performance. ServiceLoader registration makes the factory discoverable as \texttt{raptorq\_java}. We added a built-in \texttt{RAPTORQ\_6\_3} policy ($k=6, m=3$) to HDFS, enabling administrative selection alongside RS and XOR.
+
+Error handling: failures from insufficient symbols throw \texttt{IOException} (rare in practice). Future work could add configurable overhead margins.
+
+\section{Testing and Validation}
+
+Our test strategy (Figure \ref{fig:testing}) covers encoding/decoding correctness, multiple erasures, dual API paths, and randomized data.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.9\textwidth]{diagrams/test_scenarios.png}
+\caption{\label{fig:testing}Test scenarios and validation strategy}
+\end{figure}
+
+Scenarios: $(k=6, m=3)$ with 2–3 erasures (byte[] and ByteBuffer), verifying data recovery, parity regeneration, and mixed erasures. All tests pass with byte-level equality validation.
+
+\section{Challenges and Design Decisions}
+
+\subsection{Key Challenges}
+
+\begin{enumerate}
+\item \textbf{Fixed vs. Flexible Parity}: Select first $m$ repair symbols (ESI $k..k+m-1$) for determinism.
+\item \textbf{Decoding Model}: Reconstruct all source data, then extract requested symbols and regenerate parity if needed.
+\item \textbf{Memory Usage}: Accept $k \times T$ buffer concatenation; streaming optimization deferred.
+\item \textbf{Determinism}: Fixed ESI mapping ensures consistent outputs while preserving fountain properties.
+\item \textbf{Error Handling}: Throw \texttt{IOException} on rare failures; consider overhead margins later.
+\end{enumerate}
+
+\section{Conclusion and Future Work}
+
+\subsection{Summary}
+
+We successfully integrated RaptorQ into Hadoop 3.4.2, following the three-layer architecture. The implementation adds a deterministic parity strategy using OpenRQ, includes unit tests, and registers an HDFS policy for administrative use.
+
+\subsection{Limitations}
+
+We assume equal chunk sizes, concatenate inputs into a single buffer (memory-intensive for large $k/T$), use baseline OpenRQ performance without native optimizations, and handle failures via exceptions without automatic recovery.
+
+\subsection{Future Enhancements}
+
+Potential improvements: streaming for large configurations, padding for variable-sized chunks, native SIMD optimizations, configurable overhead margins, automatic retries, Reed-Solomon benchmarks, and production stress testing.
+
+\subsection{Reflections}
+
+This project provided valuable insights into:
+\begin{itemize}
+\item The design and extensibility of large-scale distributed systems
+\item The trade-offs between different erasure coding algorithms
+\item The challenges of adapting theoretical algorithms to practical system constraints
+\item The importance of maintaining compatibility while introducing new features
+\end{itemize}
+
+The implementation demonstrates that Hadoop's erasure coding architecture is well-designed for extensibility, enabling the integration of new algorithms with minimal modifications to existing code. The layered approach successfully separates concerns, making the codebase maintainable and testable.
+%\bibliographystyle{alpha}
+%\bibliography{references}
 
 \end{document}
