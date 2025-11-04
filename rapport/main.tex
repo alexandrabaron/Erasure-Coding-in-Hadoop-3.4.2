@@ -248,7 +248,7 @@ We assume equal chunk sizes, concatenate inputs into a single buffer (memory-int
 
 \subsection{Future Enhancements}
 
-Potential improvements: streaming for large configurations, padding for variable-sized chunks, native SIMD optimizations, configurable overhead margins, automatic retries, Reed-Solomon benchmarks, and production stress testing.
+Potential improvements: streaming for large configurations, padding for variable-sized chunks and production stress testing.
 
 \subsection{Reflections}
 
@@ -259,8 +259,6 @@ This project provided valuable insights into:
 \item The challenges of adapting theoretical algorithms to practical system constraints
 \item The importance of maintaining compatibility while introducing new features
 \end{itemize}
-
-The implementation demonstrates that Hadoop's erasure coding architecture is well-designed for extensibility, enabling the integration of new algorithms with minimal modifications to existing code. The layered approach successfully separates concerns, making the codebase maintainable and testable.
 %\bibliographystyle{alpha}
 %\bibliography{references}
 
