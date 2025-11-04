@@ -100,7 +100,7 @@ Hadoop's erasure coding follows a three-layer architecture that separates concer
 \item \textbf{RawCoder Layer} (\texttt{rawcoder/}): Implements the mathematical algorithms. \texttt{RawErasureEncoder} and \texttt{RawErasureDecoder} operate directly on byte arrays and ByteBuffers, performing pure computations. Our \texttt{RaptorQRawEncoder} and \texttt{RaptorQRawDecoder} integrate with the OpenRQ library.
 \end{itemize}
 
-The architecture uses Java's \texttt{ServiceLoader} mechanism for automatic factory discovery. Raw coder factories are registered in \texttt{META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory}, enabling automatic discovery and fallback mechanisms. Configuration maps codec names to classes via \texttt{io.erasurecode.codec.raptorq}.
+The architecture uses Java's \texttt{ServiceLoader} mechanism for automatic factory discovery. Raw coder factories are registered in \texttt{META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory} (the file contains \texttt{org.apache.hadoop.io.erasurecode.rawcoder.RaptorQRawErasureCoderFactory}), enabling automatic discovery and fallback mechanisms. Configuration maps codec names to classes via \texttt{io.erasurecode.codec.raptorq}, which defaults to \texttt{org.apache.hadoop.io.erasurecode.codec.RaptorQErasureCodec}.
 
 \section{RaptorQ and OpenRQ Library}
 
@@ -157,10 +157,10 @@ The encoding process follows these steps:
 
 \begin{enumerate}
 \item Concatenate $k$ input data chunks (each of size $T$) into a single buffer of size $k \times T$ bytes
-\item Create \texttt{FECParameters} with data length $k \times T$, symbol size $T$, and one source block
-\item Initialize OpenRQ \texttt{DataEncoder} and \texttt{SourceBlockEncoder}
-\item Generate $m$ repair symbols with ESIs $k$ through $k+m-1$ (deterministic selection)
-\item Write each repair symbol to the corresponding parity output
+\item Create \texttt{FECParameters} via \texttt{FECParameters.newParameters()} with data length $k \times T$, symbol size $T$, and one source block (parameter $Z=1$)
+\item Initialize OpenRQ \texttt{DataEncoder} via \texttt{OpenRQ.newEncoder()} and \texttt{SourceBlockEncoder} for source block 0
+\item Generate $m$ repair symbols by calling \texttt{repairPacket(ESI)} for ESIs $k$ through $k+m-1$ (deterministic selection)
+\item Write each repair symbol's bytes to the corresponding parity output buffer
 \end{enumerate}
 
 \subsection{Decoding Process}
@@ -168,18 +168,18 @@ The encoding process follows these steps:
 The decoding process handles both data and parity block recovery:
 
 \begin{enumerate}
-\item Build \texttt{FECParameters} matching the encoding parameters
-\item Create OpenRQ \texttt{DataDecoder} and \texttt{SourceBlockDecoder}
-\item Feed all available symbols (data and parity) to the decoder as \texttt{EncodingPacket}s
-\item Once decoding succeeds, extract recovered data symbols for erased data blocks
-\item For erased parity blocks, regenerate them by re-encoding the recovered data (since the decoder only provides source symbols)
+\item Build \texttt{FECParameters} matching the encoding parameters (data length $k \times T$, symbol size $T$, one source block)
+\item Create OpenRQ \texttt{DataDecoder} via \texttt{newDecoderWithZeroOverhead()} and \texttt{SourceBlockDecoder}
+\item Feed all available symbols (data and parity) to the decoder: parse each symbol using \texttt{parsePacket()} and add it via \texttt{putEncodingPacket()}
+\item Once decoding succeeds (verified by \texttt{isSourceBlockDecoded()}), extract recovered data symbols from \texttt{ArrayDataDecoder.dataArray()} for erased data blocks
+\item For erased parity blocks, regenerate them by re-encoding the recovered data using a new encoder (since the decoder only provides source symbols)
 \end{enumerate}
 
 \subsection{Implementation Details}
 
-We support both \texttt{byte[]} and \texttt{ByteBuffer} APIs for performance optimization. The ByteBuffer path enables zero-copy operations in some scenarios, while the byte array path provides simplicity and compatibility.
+We support both \texttt{byte[]} and \texttt{ByteBuffer} APIs for performance optimization. The ByteBuffer path enables zero-copy operations in some scenarios, while the byte array path provides simplicity and compatibility. Both paths are implemented in \texttt{RaptorQRawEncoder} and \texttt{RaptorQRawDecoder} by overriding \texttt{doEncode/doDecode} methods for both encoding state types.
 
-ServiceLoader registration makes the factory discoverable as \texttt{raptorq\_java}. We added a built-in erasure coding policy \texttt{RAPTORQ\_6\_3} (ID: 6) in \texttt{SystemErasureCodingPolicies.java} with schema $(k=6, m=3)$ and default cell size 1MB, making RaptorQ available through HDFS administrative tools alongside existing RS and XOR policies.
+ServiceLoader registration makes the factory discoverable as \texttt{raptorq\_java} (returned by \texttt{RaptorQRawErasureCoderFactory.getCoderName()}). We added a built-in erasure coding policy \texttt{RAPTORQ\_6\_3} (ID: 6) in \texttt{SystemErasureCodingPolicies.java} with schema $(k=6, m=3)$ and default cell size 1MB, making RaptorQ available through HDFS administrative tools alongside existing RS and XOR policies. Note that while \texttt{ErasureCodeConstants} defines two schemas (\texttt{RAPTORQ\_6\_3\_SCHEMA} and \texttt{RAPTORQ\_10\_4\_SCHEMA}), only the $(6,3)$ schema is registered as a built-in HDFS policy.
 
 Error handling: RaptorQ decoding may rarely fail if insufficient independent symbols are available. We handle this by throwing an \texttt{IOException} with a descriptive message. In practice, failures are extremely rare when exactly $k$ symbols are provided.
 
