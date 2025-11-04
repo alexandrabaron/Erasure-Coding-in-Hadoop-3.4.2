@@ -12,6 +12,9 @@
 \usepackage{amsmath}
 \usepackage{graphicx}
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning}
+\usepackage{booktabs}
 
 % Title
 \title{Implementing RaptorQ in Hadoop\\
@@ -64,91 +67,174 @@ Hadoop's current architecture expects exactly $m$ parity blocks, requiring adapt
 
 \section{Hadoop Erasure Coding Architecture}
 
-Hadoop's erasure coding follows a three-layer architecture (illustrated in Figure \ref{fig:architecture}):
+Hadoop's erasure coding follows a three-layer architecture that separates concerns and enables extensibility. Figure \ref{fig:layers} illustrates this layered structure:
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=0.9\textwidth]{diagrams/hadoop_architecture.png}
-\caption{\label{fig:architecture}Hadoop erasure coding architecture with RaptorQ integration}
+\begin{tikzpicture}[node distance=1.5cm, auto]
+    % Codec Layer
+    \node[rectangle, draw, fill=blue!20, text width=5cm, text centered, minimum height=1cm] (codec) {Codec Layer\\\texttt{RaptorQErasureCodec}};
+    
+    % Coder Layer
+    \node[rectangle, draw, fill=green!20, text width=5cm, text centered, minimum height=1cm, below of=codec] (coder) {Coder Layer\\\texttt{RaptorQEncoder/Decoder}};
+    
+    % RawCoder Layer
+    \node[rectangle, draw, fill=yellow!20, text width=5cm, text centered, minimum height=1cm, below of=coder] (rawcoder) {RawCoder Layer\\\texttt{RaptorQRawEncoder/Decoder}};
+    
+    % OpenRQ Library
+    \node[rectangle, draw, fill=orange!20, text width=5cm, text centered, minimum height=1cm, below of=rawcoder] (openrq) {OpenRQ Library\\RFC 6330 RaptorQ};
+    
+    % Arrows
+    \draw[->] (codec) -- (coder);
+    \draw[->] (coder) -- (rawcoder);
+    \draw[->] (rawcoder) -- (openrq);
+\end{tikzpicture}
+\caption{\label{fig:layers}Hadoop three-layer erasure coding architecture with RaptorQ integration}
 \end{figure}
 
 \begin{itemize}
-\item \textbf{Codec Layer}: Defines codec interfaces and creates encoders/decoders. We implemented \texttt{RaptorQErasureCodec} following the pattern of existing codecs.
-\item \textbf{Coder Layer}: Manages block groups and delegates to raw coders. \texttt{RaptorQEncoder/Decoder} handle Hadoop-specific concerns.
-\item \textbf{RawCoder Layer}: Performs mathematical operations on byte arrays/ByteBuffers. Our \texttt{RaptorQRawEncoder/Decoder} integrate with OpenRQ.
+\item \textbf{Codec Layer} (\texttt{codec/}): Defines high-level codec interfaces. Each codec (\texttt{ErasureCodec}) specifies the erasure schema $(k, m)$ and creates encoders/decoders. We implemented \texttt{RaptorQErasureCodec} following the pattern of existing codecs like \texttt{RSErasureCodec} and \texttt{XORErasureCodec}.
+
+\item \textbf{Coder Layer} (\texttt{coder/}): Orchestrates encoding/decoding operations and manages block groups. \texttt{ErasureEncoder} and \texttt{ErasureDecoder} prepare input/output blocks and delegate to raw coders. Our \texttt{RaptorQEncoder} and \texttt{RaptorQDecoder} handle Hadoop-specific block management.
+
+\item \textbf{RawCoder Layer} (\texttt{rawcoder/}): Implements the mathematical algorithms. \texttt{RawErasureEncoder} and \texttt{RawErasureDecoder} operate directly on byte arrays and ByteBuffers, performing pure computations. Our \texttt{RaptorQRawEncoder} and \texttt{RaptorQRawDecoder} integrate with the OpenRQ library.
 \end{itemize}
 
-ServiceLoader registration enables automatic factory discovery. Configuration maps codec names to classes via \texttt{io.erasurecode.codec.raptorq}.
+The architecture uses Java's \texttt{ServiceLoader} mechanism for automatic factory discovery. Raw coder factories are registered in \texttt{META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory}, enabling automatic discovery and fallback mechanisms. Configuration maps codec names to classes via \texttt{io.erasurecode.codec.raptorq}.
 
 \section{RaptorQ and OpenRQ Library}
 
-RaptorQ (RFC 6330) is a fountain code that encodes data into fixed-size symbols and can generate unlimited repair symbols. Any $k$ independent symbols suffice for reconstruction with high probability.
+RaptorQ (RFC 6330) is a fountain code that encodes data into fixed-size symbols and can generate an unlimited number of repair symbols. Unlike Reed-Solomon which requires exactly $k$ symbols, RaptorQ can reconstruct data from any $k$ independent symbols (source or repair) with high probability. The algorithm guarantees success with $k+\epsilon$ symbols where $\epsilon$ is typically very small (often zero in practice).
 
-OpenRQ provides the Java implementation with key classes: \texttt{FECParameters} (encoding parameters), \texttt{DataEncoder/Decoder} (high-level interfaces), and \texttt{SourceBlockEncoder/Decoder} (per-block operations).
+OpenRQ is the Java implementation we used. Its key classes include:
+\begin{itemize}
+\item \texttt{FECParameters}: Encapsulates encoding parameters (data length, symbol size, number of source blocks)
+\item \texttt{DataEncoder/DataDecoder}: High-level encoding/decoding interfaces
+\item \texttt{SourceBlockEncoder/SourceBlockDecoder}: Per-block encoding/decoding operations
+\item \texttt{EncodingPacket}: Transmittable packet structure containing symbol data and metadata
+\end{itemize}
 
-\subsection{Adaptation Challenges}
+\subsection{Adaptation to Hadoop's Fixed-Parity Model}
 
-The primary challenge is adapting RaptorQ's unlimited symbol model to Hadoop's fixed-$m$ requirement. Figure \ref{fig:esi-mapping} illustrates our deterministic ESI mapping strategy.
+The primary challenge is adapting RaptorQ's unlimited symbol generation model to Hadoop's requirement of exactly $m$ parity blocks. We solve this through deterministic Encoding Symbol Identifier (ESI) mapping:
 
-\begin{figure}[h]
+\begin{table}[h]
 \centering
-\includegraphics[width=0.8\textwidth]{diagrams/esi_mapping.png}
-\caption{\label{fig:esi-mapping}ESI mapping: Hadoop blocks to RaptorQ symbols}
-\end{figure}
+\begin{tabular}{l|c|c}
+\hline
+\textbf{Hadoop Block} & \textbf{RaptorQ ESI} & \textbf{Symbol Type} \\\hline
+Data block 0 & ESI 0 & Source symbol \\
+Data block 1 & ESI 1 & Source symbol \\
+\ldots & \ldots & \ldots \\
+Data block $k-1$ & ESI $k-1$ & Source symbol \\\hline
+Parity block 0 & ESI $k$ & Repair symbol \\
+Parity block 1 & ESI $k+1$ & Repair symbol \\
+\ldots & \ldots & \ldots \\
+Parity block $m-1$ & ESI $k+m-1$ & Repair symbol \\\hline
+\end{tabular}
+\caption{\label{tab:esi-mapping}ESI mapping between Hadoop blocks and RaptorQ symbols}
+\end{table}
 
-We map data blocks to source symbols (ESI $0..k-1$) and parity blocks to repair symbols (ESI $k..k+m-1$), ensuring deterministic parity generation while preserving fountain code properties.
+This deterministic mapping ensures that the same input always produces the same parity output, which is crucial for Hadoop's block management and consistency requirements.
 
 \section{Implementation}
 
-We implement across Hadoop's three layers: \texttt{RaptorQErasureCodec} (codec), \texttt{RaptorQEncoder/Decoder} (coders), and \texttt{RaptorQRawEncoder/Decoder} (raw coders with OpenRQ).
+\subsection{Architecture Integration}
 
-Figures \ref{fig:encoding} and \ref{fig:decoding} illustrate the encoding and decoding flows.
+Our implementation follows Hadoop's three-layer architecture:
 
-\begin{figure}[h]
-\centering
-\includegraphics[width=\textwidth]{diagrams/raptorq_encoding.png}
-\caption{\label{fig:encoding}RaptorQ encoding flow in Hadoop}
-\end{figure}
+\begin{itemize}
+\item \textbf{Codec Layer}: \texttt{RaptorQErasureCodec} extends \texttt{ErasureCodec} and creates \texttt{RaptorQEncoder} and \texttt{RaptorQDecoder} instances. It registers the codec name \texttt{"raptorq"} in \texttt{ErasureCodeConstants}.
 
-\begin{figure}[h]
-\centering
-\includegraphics[width=\textwidth]{diagrams/raptorq_decoding.png}
-\caption{\label{fig:decoding}RaptorQ decoding flow with parity regeneration}
-\end{figure}
+\item \textbf{Coder Layer}: \texttt{RaptorQEncoder} and \texttt{RaptorQDecoder} extend their respective base classes and delegate to raw coders via \texttt{CodecUtil.createRawEncoder/Decoder()}. They handle Hadoop block group management while the raw coders perform mathematical operations.
 
-\textbf{Encoding}: Concatenate $k$ chunks ($k \times T$ bytes), create \texttt{FECParameters}, generate $m$ repair symbols (ESI $k..k+m-1$), write to parity outputs.
+\item \textbf{RawCoder Layer}: \texttt{RaptorQRawEncoder} and \texttt{RaptorQRawDecoder} implement the integration with OpenRQ, performing the actual encoding and decoding computations.
+\end{itemize}
 
-\textbf{Decoding}: Build matching \texttt{FECParameters}, feed available symbols to decoder, extract recovered data; for erased parity, re-encode to regenerate.
+\subsection{Encoding Process}
+
+The encoding process follows these steps:
+
+\begin{enumerate}
+\item Concatenate $k$ input data chunks (each of size $T$) into a single buffer of size $k \times T$ bytes
+\item Create \texttt{FECParameters} with data length $k \times T$, symbol size $T$, and one source block
+\item Initialize OpenRQ \texttt{DataEncoder} and \texttt{SourceBlockEncoder}
+\item Generate $m$ repair symbols with ESIs $k$ through $k+m-1$ (deterministic selection)
+\item Write each repair symbol to the corresponding parity output
+\end{enumerate}
+
+\subsection{Decoding Process}
+
+The decoding process handles both data and parity block recovery:
+
+\begin{enumerate}
+\item Build \texttt{FECParameters} matching the encoding parameters
+\item Create OpenRQ \texttt{DataDecoder} and \texttt{SourceBlockDecoder}
+\item Feed all available symbols (data and parity) to the decoder as \texttt{EncodingPacket}s
+\item Once decoding succeeds, extract recovered data symbols for erased data blocks
+\item For erased parity blocks, regenerate them by re-encoding the recovered data (since the decoder only provides source symbols)
+\end{enumerate}
 
 \subsection{Implementation Details}
 
-We support both \texttt{byte[]} and \texttt{ByteBuffer} APIs for performance. ServiceLoader registration makes the factory discoverable as \texttt{raptorq\_java}. We added a built-in \texttt{RAPTORQ\_6\_3} policy ($k=6, m=3$) to HDFS, enabling administrative selection alongside RS and XOR.
+We support both \texttt{byte[]} and \texttt{ByteBuffer} APIs for performance optimization. The ByteBuffer path enables zero-copy operations in some scenarios, while the byte array path provides simplicity and compatibility.
 
-Error handling: failures from insufficient symbols throw \texttt{IOException} (rare in practice). Future work could add configurable overhead margins.
+ServiceLoader registration makes the factory discoverable as \texttt{raptorq\_java}. We added a built-in erasure coding policy \texttt{RAPTORQ\_6\_3} (ID: 6) in \texttt{SystemErasureCodingPolicies.java} with schema $(k=6, m=3)$ and default cell size 1MB, making RaptorQ available through HDFS administrative tools alongside existing RS and XOR policies.
+
+Error handling: RaptorQ decoding may rarely fail if insufficient independent symbols are available. We handle this by throwing an \texttt{IOException} with a descriptive message. In practice, failures are extremely rare when exactly $k$ symbols are provided.
 
 \section{Testing and Validation}
 
-Our test strategy (Figure \ref{fig:testing}) covers encoding/decoding correctness, multiple erasures, dual API paths, and randomized data.
+We implemented comprehensive unit tests (\texttt{RaptorQRawCoderTest}) covering multiple scenarios:
 
-\begin{figure}[h]
+\begin{table}[h]
 \centering
-\includegraphics[width=0.9\textwidth]{diagrams/test_scenarios.png}
-\caption{\label{fig:testing}Test scenarios and validation strategy}
-\end{figure}
+\begin{tabular}{l|c|c|c}
+\hline
+\textbf{Test Case} & \textbf{Configuration} & \textbf{Erasures} & \textbf{API} \\\hline
+Test 1 & $k=6, m=3, T=1024$ & 2 random blocks & \texttt{byte[]} \\
+Test 2 & $k=6, m=3, T=2048$ & 3 random blocks & \texttt{ByteBuffer} \\\hline
+\end{tabular}
+\caption{\label{tab:test-scenarios}Test scenarios}
+\end{table}
 
-Scenarios: $(k=6, m=3)$ with 2–3 erasures (byte[] and ByteBuffer), verifying data recovery, parity regeneration, and mixed erasures. All tests pass with byte-level equality validation.
+The test suite validates:
+\begin{itemize}
+\item \textbf{Encoding correctness}: Parity blocks are correctly generated from data blocks
+\item \textbf{Data recovery}: Erased data blocks are successfully reconstructed
+\item \textbf{Parity regeneration}: Erased parity blocks are correctly regenerated
+\item \textbf{Mixed erasures}: Combinations of data and parity block erasures
+\item \textbf{Byte-level equality}: Original and recovered data match exactly
+\item \textbf{Randomized testing}: Secure random data generation to catch edge cases
+\end{itemize}
+
+All tests pass successfully, confirming the mathematical correctness of our implementation.
 
 \section{Challenges and Design Decisions}
 
-\subsection{Key Challenges}
+\subsection{Conceptual Mismatches}
 
-\begin{enumerate}
-\item \textbf{Fixed vs. Flexible Parity}: Select first $m$ repair symbols (ESI $k..k+m-1$) for determinism.
-\item \textbf{Decoding Model}: Reconstruct all source data, then extract requested symbols and regenerate parity if needed.
-\item \textbf{Memory Usage}: Accept $k \times T$ buffer concatenation; streaming optimization deferred.
-\item \textbf{Determinism}: Fixed ESI mapping ensures consistent outputs while preserving fountain properties.
-\item \textbf{Error Handling}: Throw \texttt{IOException} on rare failures; consider overhead margins later.
-\end{enumerate}
+\subsubsection{Fixed vs. Flexible Parity}
+\textbf{Challenge}: RaptorQ can generate unlimited repair symbols, while Hadoop requires exactly $m$ parity blocks.
+
+\textbf{Solution}: We deterministically select the first $m$ repair symbols (ESIs $k$ through $k+m-1$) during encoding. This provides deterministic parity generation while preserving RaptorQ's decoding flexibility.
+
+\subsubsection{Decoding Model}
+\textbf{Challenge}: Hadoop provides a list of erased block indices to reconstruct, while RaptorQ requires $\geq k$ arbitrary symbols and reconstructs all source data.
+
+\textbf{Solution}: We feed the decoder with all available symbols (data and parity). After successful decoding, we extract only the requested erased symbols from the recovered data. For parity erasures, we regenerate them via re-encoding.
+
+\subsection{Memory Management}
+
+\textbf{Challenge}: Concatenating $k$ input chunks into a single buffer consumes $k \times T$ memory, which may be prohibitive for large $k$ and $T$.
+
+\textbf{Design Decision}: We accepted this trade-off for the initial implementation to simplify integration. Future optimizations could implement streaming within Hadoop's chunking framework to reduce memory footprint.
+
+\subsection{Determinism Requirements}
+
+\textbf{Challenge}: Hadoop requires deterministic parity generation for consistency, while fountain codes are inherently probabilistic.
+
+\textbf{Solution}: By fixing the ESI selection strategy (data: $0..k-1$, parity: $k..k+m-1$), we ensure that the same input always produces the same parity output, achieving determinism at the parity block level while maintaining fountain code properties at the symbol level.
 
 \section{Conclusion and Future Work}
 
