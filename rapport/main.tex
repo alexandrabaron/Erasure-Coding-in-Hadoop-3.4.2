@@ -67,29 +67,60 @@ Hadoop's current architecture expects exactly $m$ parity blocks, requiring adapt
 
 \section{Hadoop Erasure Coding Architecture}
 
-Hadoop's erasure coding follows a three-layer architecture that separates concerns and enables extensibility. Figure \ref{fig:layers} illustrates this layered structure:
+Hadoop's erasure coding follows a three-layer architecture that separates concerns and enables extensibility. Figure \ref{fig:layers} illustrates this layered structure with the RaptorQ integration flow:
 
 \begin{figure}[h]
 \centering
-\begin{tikzpicture}[node distance=1.5cm, auto]
+\begin{tikzpicture}[
+    node distance=2cm,
+    layer/.style={rectangle, draw, rounded corners=5pt, text width=5cm, text centered, minimum height=1.3cm},
+    lib/.style={rectangle, draw, rounded corners=5pt, fill=orange!15, text width=5cm, text centered, minimum height=1.3cm},
+    service/.style={rectangle, draw, rounded corners=5pt, fill=purple!15, text width=3cm, text centered, minimum height=1cm},
+    arrow/.style={->, >=stealth, line width=1.5pt, color=black!80},
+    servicearrow/.style={->, >=stealth, dashed, line width=1pt, color=purple!60}
+]
+
     % Codec Layer
-    \node[rectangle, draw, fill=blue!20, text width=5cm, text centered, minimum height=1cm] (codec) {Codec Layer\\\texttt{RaptorQErasureCodec}};
+    \node[layer, fill=blue!15] (codec) {
+        \textbf{Codec Layer} \\
+        \texttt{RaptorQErasureCodec}
+    };
     
     % Coder Layer
-    \node[rectangle, draw, fill=green!20, text width=5cm, text centered, minimum height=1cm, below of=codec] (coder) {Coder Layer\\\texttt{RaptorQEncoder/Decoder}};
+    \node[layer, fill=green!15, below of=codec] (coder) {
+        \textbf{Coder Layer} \\
+        \texttt{RaptorQEncoder/Decoder}
+    };
     
     % RawCoder Layer
-    \node[rectangle, draw, fill=yellow!20, text width=5cm, text centered, minimum height=1cm, below of=coder] (rawcoder) {RawCoder Layer\\\texttt{RaptorQRawEncoder/Decoder}};
+    \node[layer, fill=yellow!15, below of=coder] (rawcoder) {
+        \textbf{RawCoder Layer} \\
+        \texttt{RaptorQRawEncoder/Decoder}
+    };
     
     % OpenRQ Library
-    \node[rectangle, draw, fill=orange!20, text width=5cm, text centered, minimum height=1cm, below of=rawcoder] (openrq) {OpenRQ Library\\RFC 6330 RaptorQ};
+    \node[lib, below of=rawcoder] (openrq) {
+        \textbf{OpenRQ Library} \\
+        \texttt{RFC 6330 RaptorQ}
+    };
     
-    % Arrows
-    \draw[->] (codec) -- (coder);
-    \draw[->] (coder) -- (rawcoder);
-    \draw[->] (rawcoder) -- (openrq);
+    % ServiceLoader (on the right)
+    \node[service, right of=coder, xshift=4cm] (service) {
+        \textbf{ServiceLoader} \\
+        \texttt{META-INF/services/}
+    };
+    
+    % Main vertical flow arrows
+    \draw[arrow] (codec) -- (coder);
+    \draw[arrow] (coder) -- (rawcoder);
+    \draw[arrow] (rawcoder) -- (openrq);
+    
+    % ServiceLoader connections (simplified)
+    \draw[servicearrow] (service.west) -- (rawcoder.east);
+    \draw[servicearrow] (service.west) |- (codec.east);
+    
 \end{tikzpicture}
-\caption{\label{fig:layers}Hadoop three-layer erasure coding architecture with RaptorQ integration}
+\caption{\label{fig:layers}Hadoop three-layer erasure coding architecture with RaptorQ integration. Arrows show the data flow from codec to OpenRQ library. The ServiceLoader (right) discovers factories via META-INF/services.}
 \end{figure}
 
 \begin{itemize}
@@ -100,7 +131,7 @@ Hadoop's erasure coding follows a three-layer architecture that separates concer
 \item \textbf{RawCoder Layer} (\texttt{rawcoder/}): Implements the mathematical algorithms. \texttt{RawErasureEncoder} and \texttt{RawErasureDecoder} operate directly on byte arrays and ByteBuffers, performing pure computations. Our \texttt{RaptorQRawEncoder} and \texttt{RaptorQRawDecoder} integrate with the OpenRQ library.
 \end{itemize}
 
-The architecture uses Java's \texttt{ServiceLoader} mechanism for automatic factory discovery. Raw coder factories are registered in \texttt{META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory} (the file contains \texttt{org.apache.hadoop.io.erasurecode.rawcoder.RaptorQRawErasureCoderFactory}), enabling automatic discovery and fallback mechanisms. Configuration maps codec names to classes via \texttt{io.erasurecode.codec.raptorq}, which defaults to \texttt{org.apache.hadoop.io.erasurecode.codec.RaptorQErasureCodec}.
+The architecture uses Java's \texttt{ServiceLoader} mechanism (shown on the right in Figure \ref{fig:layers}) for automatic factory discovery. Raw coder factories are registered in \texttt{META-INF/services/org.apache.hadoop.io.erasurecode.rawcoder.RawErasureCoderFactory} (the file contains \texttt{org.apache.hadoop.io.erasurecode.rawcoder.RaptorQRawErasureCoderFactory}), enabling automatic discovery and fallback mechanisms. Configuration maps codec names to classes via \texttt{io.erasurecode.codec.raptorq}, which defaults to \texttt{org.apache.hadoop.io.erasurecode.codec.RaptorQErasureCodec}.
 
 \section{RaptorQ and OpenRQ Library}
 
