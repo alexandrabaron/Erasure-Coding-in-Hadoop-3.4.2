@@ -214,6 +214,17 @@ ServiceLoader registration makes the factory discoverable as \texttt{raptorq\_ja
 
 Error handling: RaptorQ decoding may rarely fail if insufficient independent symbols are available. We handle this by throwing an \texttt{IOException} with a descriptive message. In practice, failures are extremely rare when exactly $k$ symbols are provided.
 
+\section{Compiling}
+    Hadoop provides a Dockerfile to build a Docker image with all the building tools included. We used it to get a working building environment, which include maven and ant.
+
+    Maven is the Java building system developed by the Apache foundation, used here in Hadoop. It relies on \verb|pom.xml| files to find the dependencies and the build target in the whole project. As we added OpenRQ as a dependency we had to edit the file located in hadoop-common, the sub-project containing the erasure code.
+
+    We also had to compile the OpenRQ library to make it available to Maven. This project is compiled with Ant, and produces a .jar archive.
+
+    After adding OpenRQ to maven's repository, we successfuly compiled Hadoop with our own erasure code. You can find this build on our \href{https://github.com/alexandrabaron/Erasure-Coding-in-Hadoop-3.4.2/releases/tag/release}{GitHub}.
+
+    \small{\textit{We initially relied on version 3.4.2 of Hadoop to add our code, but a bug appeared in this version because of an external package upgrade. Relevant patches from the original repository have been applied by hand, so the provided version is somewhere between 3.4.2 and 3.4.5.}}
+    
 \section{Testing and Validation}
 
 We implemented comprehensive unit tests (\texttt{RaptorQRawCoderTest}) covering multiple scenarios:
